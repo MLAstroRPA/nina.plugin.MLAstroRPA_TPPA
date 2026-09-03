@@ -52,14 +52,14 @@ namespace NINA.Plugins.PolarAlignment.Dockables {
                                         IWeatherDataMediator weatherDataMediator,
                                         IMessageBroker messageBroker,
                                         IGuiderMediator guiderMediator) : base(profileService) {
-            Title = "Three Point Polar Alignment";
+            Title = "MLAstro RPA";
             OptionsExpanded = true;
             // Load the icon from a lightweight ResourceDictionary WITHOUT x:Class/code-behind.
             // Compiled ResourceDictionaries with x:Class cannot be loaded via Source (throws
             // "Cannot re-initialize ResourceDictionary instance"), so we don't load Options.xaml here.
             var dict = new ResourceDictionary();
-            dict.Source = new Uri("NINA.Plugins.PolarAlignment;component/Resources/PolarizationIcons.xaml", UriKind.RelativeOrAbsolute);
-            ImageGeometry = (System.Windows.Media.GeometryGroup)dict["ThreePointsSVG"];
+            dict.Source = new Uri("NINA.Plugins.PolarAlignment;component/Resources/MLAstroTPPAIcon.xaml", UriKind.RelativeOrAbsolute);
+            ImageGeometry = (System.Windows.Media.GeometryGroup)dict["MLAstroTPPAIcon"];
             ImageGeometry.Freeze();
 
             this.profileService = profileService;

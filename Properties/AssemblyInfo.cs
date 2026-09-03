@@ -35,7 +35,7 @@ using System.Runtime.InteropServices;
 //Common tags that quickly describe your plugin
 [assembly: AssemblyMetadata("Tags", "Polar alignment,Motor Control,Hardware,Sequencer,MLAstroRPA,TPPA")]
 
-[assembly: AssemblyMetadata("FeaturedImageURL", "https://raw.githubusercontent.com/MLAstroRPA/MLAstroRPA.NINA.Plugin/main/Resources/MRPA-on.png")]
+[assembly: AssemblyMetadata("FeaturedImageURL", "https://raw.githubusercontent.com/MLAstroRPA/nina.plugin.MLAstroRPA_TPPA/main/MLAstroRPA-navigation/Resources/MLAstro_logo.png")]
 
 //An example screenshot of your plugin in action
 [assembly: AssemblyMetadata("ScreenshotURL", "https://raw.githubusercontent.com/isbeorn/nina.plugin.polaralignment/master/PolarAlignment/Starlock2.png")]

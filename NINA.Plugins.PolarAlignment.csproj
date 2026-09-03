@@ -55,6 +55,7 @@ sequencer instruction and polar alignment assistant.</Description>
 
   <ItemGroup>
     <!-- Embedded MLAstro brand logo images (pack URIs in HeaderBar.xaml) -->
+    <Resource Include="MLAstroRPA-navigation\Resources\MLAstro_logo.png" />
     <Resource Include="MLAstroRPA-navigation\Resources\MRPA-on.png" />
     <Resource Include="MLAstroRPA-navigation\Resources\MRPA-off.png" />
     <Resource Include="MLAstroRPA-navigation\Resources\MRPA-on.svg" />
