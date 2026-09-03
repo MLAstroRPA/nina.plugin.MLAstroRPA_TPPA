@@ -14,8 +14,9 @@ using System.Runtime.InteropServices;
 [assembly: ComVisible(false)]
 
 // The following GUID is the PluginId (Identifier) of the merged MLAstroRPA+TPPA plugin.
-// It is kept from the TPPA base plugin so that existing TPPA settings/profile data survives.
-[assembly: Guid("1de8d7d3-f11e-494c-a371-95cb48dffa18")]
+// NOTE: this is a UNIQUE GUID distinct from the standalone TPPA plugin (1de8d7d3-f11e-494c-a371-95cb48dffa18)
+// so NINA treats MLAstroRPA+TPPA and Three Point Polar Alignment as two separate plugins.
+[assembly: Guid("1352D162-2E66-4F80-A05B-854F021DB913")]
 
 //The minimum Version of N.I.N.A. that this plugin is compatible with
 [assembly: AssemblyMetadata("MinimumApplicationVersion", "3.1.2.9001")]

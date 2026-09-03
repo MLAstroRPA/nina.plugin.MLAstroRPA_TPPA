@@ -6,7 +6,7 @@
 
         <!-- CONTROL tab body (hosted with DataContext = MLAstroController) -->
     <DataTemplate x:Key="MlaControlBody">
-        <view:PolarAlignmentDockable DataContext="{Binding PolarizationVM}" />
+        <view:PolarAlignmentDockable DataContext="{Binding PolarAlignmentVM}" />
     </DataTemplate>
 
     <!-- CONNECTION tab body (hosted with DataContext = MLAstroController) -->

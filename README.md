@@ -19,11 +19,13 @@ The plugin options page is a single page with top-level tabs:
 
 ## Architecture notes
 
-- Single assembly `NINA.Plugins.PolarAlignment`, plugin display name **MLAstroRPA+TPPA**,
-  PluginId (GUID) `1de8d7d3-f11e-494c-a371-95cb48dffa18` (kept from TPPA so TPPA settings survive).
-- MLAstro-origin code keeps the `MLAstro_Robotic_Polar_Alignment.*` namespaces under `MLAstro\`.
+- Single assembly `NINA.Plugins.PolarAlignment`, plugin display name **MLAstroRPA+TPPA**, with a
+  UNIQUE PluginId (GUID) `1352D162-2E66-4F80-A05B-854F021DB913` — distinct from the standalone TPPA
+  plugin (`1de8d7d3-f11e-494c-a371-95cb48dffa18`) so NINA treats them as two separate plugins and
+  both can be installed side by side.
+- MLAstro-origin code keeps the `MLAstro_Robotic_Polar_Alignment.*` namespaces under `MLAstroRPA-navigation\`.
 - There is exactly ONE `IPluginManifest` (`PolarAlignmentPlugin`). The MLAstro options/state
-  controller (`MLAstro\Plugin\MLAstroController.cs`) is owned by it (`PolarAlignmentPlugin.MLAstro`).
+  controller (`MLAstroRPA-navigation\Plugin\MLAstroController.cs`) is owned by it (`PolarAlignmentPlugin.MLAstro`).
 - The serial COM port is owned by `SerialConnectionService` (MLAstro). The TPPA `MLAstroRPA`
   driver borrows it through the external-control API (`MLAstroRPA\MLAstroLink.cs` → direct calls,
   no reflection) with a direct COM-scan fallback.

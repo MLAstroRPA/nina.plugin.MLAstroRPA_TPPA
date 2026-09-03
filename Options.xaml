@@ -28,10 +28,10 @@
     <s:String x:Key="MLAstroRPADetectDirectionToolTip">While auto-reverse is enabled, the very first nudge only moves this percentage of the required correction so the plugin can detect whether the axis direction is correct before committing the full move. Range: 1–100 %.</s:String>
     <s:String x:Key="MLAstroRPACorrectionFactorToolTip">Safety factor applied to the automated correction moves (Azimuth axis always, and Altitude axis when overshoot is not used for that direction). 100 % corrects the full measured error; lower values correct only a percentage of it. Range: 1–100 % (default 75).</s:String>
     <DataTemplate x:Key="MLAstroRPA+TPPA_Options">
-        <DockPanel>
+        <DockPanel Loaded="OnOptionsRootLoaded">
             <view:HeaderBar DockPanel.Dock="Top"
                             Panel.ZIndex="10"
-                            DataContext="{Binding MLAstro.PolarizationVM}" />
+                            DataContext="{Binding MLAstro.PolarAlignmentVM}" />
             <TabControl>
                 <TabControl.Resources>
                     <Style TargetType="TabItem">
@@ -712,13 +712,13 @@
         </Grid>
                 </TabItem>
                 <TabItem Header="CONTROL">
-                    <view:PolarAlignmentDockable DataContext="{Binding MLAstro.PolarizationVM}" />
-                </TabItem>
-                <TabItem Header="CONNECTION">
-                    <ContentControl Content="{Binding MLAstro}" ContentTemplate="{DynamicResource MlaConnectionBody}" />
+                    <view:PolarAlignmentDockable DataContext="{Binding MLAstro.PolarAlignmentVM}" />
                 </TabItem>
                 <TabItem Header="CONFIGURATION" IsEnabled="{Binding MLAstro.IsExternalUnlocked}">
                     <ContentControl Content="{Binding MLAstro}" ContentTemplate="{DynamicResource MlaConfigurationBody}" />
+                </TabItem>
+                <TabItem Header="CONNECTION">
+                    <ContentControl Content="{Binding MLAstro}" ContentTemplate="{DynamicResource MlaConnectionBody}" />
                 </TabItem>
             </TabControl>
         </DockPanel>

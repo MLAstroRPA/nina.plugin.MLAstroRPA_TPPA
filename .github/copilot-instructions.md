@@ -4,13 +4,13 @@
 - This is the merged **MLAstroRPA+TPPA** NINA plugin (single assembly `NINA.Plugins.PolarAlignment`,
   display name `MLAstroRPA+TPPA`). It combines the MLAstro Robotic Polar Alignment hardware control
   (CONTROL / CONNECTION / CONFIGURATION tabs) with the Three Point Polar Alignment (TPPA) wizard.
-- MLAstro-origin code keeps the `MLAstro_Robotic_Polar_Alignment.*` namespaces (folder `MLAstro\`).
+- MLAstro-origin code keeps the `MLAstro_Robotic_Polar_Alignment.*` namespaces (folder `MLAstroRPA-navigation\`).
   TPPA-origin code lives in `NINA.Plugins.PolarAlignment.*` at the repository root.
 - There is exactly ONE `IPluginManifest`: `PolarAlignmentPlugin` (root). The MLAstro controller
-  (`MLAstro\Plugin\MLAstroController.cs`) is NOT a manifest - it is owned by `PolarAlignmentPlugin.MLAstro`.
+  (`MLAstroRPA-navigation\Plugin\MLAstroController.cs`) is NOT a manifest - it is owned by `PolarAlignmentPlugin.MLAstro`.
 - The plugin Options page is the root `Options.xaml` (`DataTemplate x:Key="MLAstroRPA+TPPA_Options"`)
   - a TabControl with tabs: `TPPA OPTION`, `CONTROL`, `CONNECTION`, `CONFIGURATION`. The MLAstro tab
-  bodies live in `MLAstro\Plugin\MLAstroOptions.xaml` (merged via `MergedDictionaries`).
+  bodies live in `MLAstroRPA-navigation\Plugin\MLAstroOptions.xaml` (merged via `MergedDictionaries`).
 - In the plugin options UI, only top-level sections (tabs / top-level Expanders) should be
   expandable/collapsible and they should default to expanded; nested subsections must not be collapsible.
 - The serial COM port is owned by `SerialConnectionService` (MLAstro). TPPA's `MLAstroRPA` driver

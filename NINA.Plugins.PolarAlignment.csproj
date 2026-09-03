@@ -4,7 +4,8 @@
     MLAstroRPA + TPPA merged NINA plugin.
     Single plugin assembly "NINA.Plugins.PolarAlignment" (kept from the TPPA base project so all
     TPPA internal pack: URIs stay valid). Display name comes from AssemblyTitle = "MLAstroRPA+TPPA".
-    PluginId (GUID) = TPPA's 1de8d7d3-f11e-494c-a371-95cb48dffa18 (see Properties/AssemblyInfo.cs).
+    PluginId (GUID) = 1352D162-2E66-4F80-A05B-854F021DB913 (UNIQUE, distinct from standalone TPPA
+    1de8d7d3-f11e-494c-a371-95cb48dffa18 so NINA treats them as separate plugins).
   -->
 
   <PropertyGroup>
@@ -54,10 +55,10 @@ sequencer instruction and polar alignment assistant.</Description>
 
   <ItemGroup>
     <!-- Embedded MLAstro brand logo images (pack URIs in HeaderBar.xaml) -->
-    <Resource Include="MLAstro\Resources\MRPA-on.png" />
-    <Resource Include="MLAstro\Resources\MRPA-off.png" />
-    <Resource Include="MLAstro\Resources\MRPA-on.svg" />
-    <Resource Include="MLAstro\Resources\MRPA-off.svg" />
+    <Resource Include="MLAstroRPA-navigation\Resources\MRPA-on.png" />
+    <Resource Include="MLAstroRPA-navigation\Resources\MRPA-off.png" />
+    <Resource Include="MLAstroRPA-navigation\Resources\MRPA-on.svg" />
+    <Resource Include="MLAstroRPA-navigation\Resources\MRPA-off.svg" />
   </ItemGroup>
 
   <ItemGroup>

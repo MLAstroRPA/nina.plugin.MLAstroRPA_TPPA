@@ -362,7 +362,7 @@ namespace MLAstro_Robotic_Polar_Alignment.Plugin
                         {
                             _pluginResourceDictionary = new ResourceDictionary
                             {
-                                Source = new Uri("pack://application:,,,/NINA.Plugins.PolarAlignment;component/MLAstro/Dockview/Dockable.xaml", UriKind.Absolute)
+                                Source = new Uri("pack://application:,,,/NINA.Plugins.PolarAlignment;component/MLAstroRPA-navigation/Dockview/Dockable.xaml", UriKind.Absolute)
                             };
                             Application.Current.Resources.MergedDictionaries.Add(_pluginResourceDictionary);
                         });
@@ -381,7 +381,7 @@ namespace MLAstro_Robotic_Polar_Alignment.Plugin
                     var registerMethod = iconLocatorType.GetMethod("Register", new[] { typeof(Uri) });
                     if (registerMethod != null)
                     {
-                        var uri = new Uri("pack://application:,,,/NINA.Plugins.PolarAlignment;component/MLAstro/Resources/MLAstroIcons.xaml", UriKind.Absolute);
+                        var uri = new Uri("pack://application:,,,/NINA.Plugins.PolarAlignment;component/MLAstroRPA-navigation/Resources/MLAstroIcons.xaml", UriKind.Absolute);
                         try
                         {
                             // Ensure any UI-related registration runs on the UI thread

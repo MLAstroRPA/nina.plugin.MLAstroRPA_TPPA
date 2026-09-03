@@ -4,12 +4,13 @@
 
 This repository is the **single merged plugin** combining the standalone MLAstro Robotic Polar
 Alignment plugin with this TPPA fork. Plugin display name: **MLAstroRPA+TPPA**
-(assembly `NINA.Plugins.PolarAlignment`, GUID `1de8d7d3-f11e-494c-a371-95cb48dffa18`).
+(assembly `NINA.Plugins.PolarAlignment`, GUID `1352D162-2E66-4F80-A05B-854F021DB913` — a UNIQUE
+GUID, distinct from standalone TPPA `1de8d7d3-...`, so NINA sees them as two different plugins).
 
 - Single options page with top-level tabs: **TPPA OPTION**, **CONTROL**, **CONNECTION**,
   **CONFIGURATION**.
 - Single `IPluginManifest` (`PolarAlignmentPlugin`); the MLAstro options/state controller is
-  `MLAstro\Plugin\MLAstroController.cs`, owned by the manifest.
+  `MLAstroRPA-navigation\Plugin\MLAstroController.cs`, owned by the manifest.
 - Removed the cross-plugin reflection bridge: `MLAstroRPA\MLAstroLink.cs` now calls
   `SerialConnectionService` directly (same assembly) while keeping the shared COM-port
   "external control" borrow + pause-query architecture and the direct COM-scan fallback.
