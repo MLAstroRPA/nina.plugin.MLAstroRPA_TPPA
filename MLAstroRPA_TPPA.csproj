@@ -92,7 +92,7 @@ sequencer instruction and polar alignment assistant.</Description>
     <Exec IgnoreExitCode="true" Command="taskkill /f /im NINA.exe 2>nul" />
     <Exec IgnoreExitCode="true" Command="powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;for ($i=0; $i -lt 50; $i++) { if (-not (Get-Process -Name NINA -ErrorAction SilentlyContinue)) { break }; Start-Sleep -Milliseconds 200 }&quot;" />
     <Exec IgnoreExitCode="true" Command="&#xD;&#xA;if not exist &quot;%25localappdata%25\NINA\Plugins&quot; (&#xD;&#xA;    echo &quot;Creating Plugins %25localappdata%25\NINA\Plugins folder&quot;&#xD;&#xA;    mkdir  &quot;%25localappdata%25\NINA\Plugins&quot;&#xD;&#xA;)&#xD;&#xA;&#xD;&#xA;if exist &quot;%25localappdata%25\NINA\Plugins\3.0.0\MLAstroRPA-TPPA&quot; (&#xD;&#xA;    echo &quot; folder cleanup&quot;&#xD;&#xA;    rmdir &quot;%25localappdata%25\NINA\Plugins\3.0.0\MLAstroRPA-TPPA&quot; /S /Q&#xD;&#xA;)&#xD;&#xA;&#xD;&#xA;if not exist &quot;%25localappdata%25\NINA\Plugins\3.0.0\MLAstroRPA-TPPA&quot; (&#xD;&#xA;    echo &quot;Creating %25localappdata%25\NINA\Plugins\3.0.0\MLAstroRPA-TPPA folder&quot;&#xD;&#xA;    mkdir  &quot;%25localappdata%25\NINA\Plugins\3.0.0\MLAstroRPA-TPPA&quot;&#xD;&#xA;)&#xD;&#xA;echo &quot;Copying $(TargetFileName)&quot;&#xD;&#xA;copy &quot;$(TargetDir)$(TargetFileName)&quot; &quot;%25localappdata%25\NINA\Plugins\3.0.0\MLAstroRPA-TPPA\$(TargetName)$(TargetExt)&quot; /Y&#xD;&#xA;" />
-    <!-- Also ship the plugin logo next to the DLL so NINA can show the MLAstro logo -->
-    <Exec IgnoreExitCode="true" Command="copy &quot;$(MSBuildProjectDirectory)\logo.png&quot; &quot;%25localappdata%25\NINA\Plugins\3.0.0\MLAstroRPA-TPPA\logo.png&quot; /Y" />
+    <!-- Only the plugin DLL is deployed. NINA shows the logo via
+         AssemblyMetadata("FeaturedImageURL") and the in-UI logos are embedded resources. -->
   </Target>
 </Project>

@@ -52,7 +52,7 @@ namespace NINA.Plugins.PolarAlignment.Dockables {
                                         IWeatherDataMediator weatherDataMediator,
                                         IMessageBroker messageBroker,
                                         IGuiderMediator guiderMediator) : base(profileService) {
-            Title = "MLAstro RPA";
+            Title = "MLAstroRPA + TPPA";
             OptionsExpanded = true;
             // Load the icon from a lightweight ResourceDictionary WITHOUT x:Class/code-behind.
             // Compiled ResourceDictionaries with x:Class cannot be loaded via Source (throws
