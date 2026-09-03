@@ -19,7 +19,7 @@ The plugin options page is a single page with top-level tabs:
 
 ## Architecture notes
 
-- Single assembly `NINA.Plugins.PolarAlignment`, plugin display name **MLAstroRPA+TPPA**, with a
+- Single assembly `NINA.Plugins.MLAstroRPA_TPPA`, plugin display name **MLAstroRPA+TPPA**, with a
   UNIQUE PluginId (GUID) `1352D162-2E66-4F80-A05B-854F021DB913` — distinct from the standalone TPPA
   plugin (`1de8d7d3-f11e-494c-a371-95cb48dffa18`) so NINA treats them as two separate plugins and
   both can be installed side by side.
@@ -43,7 +43,9 @@ Build the plugin (Debug/Release) — the post-build step copies the DLL to
 `%LOCALAPPDATA%\NINA\Plugins\3.0.0\MLAstroRPA-TPPA\`.
 
 ```powershell
-dotnet build NINA.Plugins.PolarAlignment.csproj -c Release -tl:off
+dotnet build MLAstroRPA_TPPA.csproj -c Release -tl:off
+# or via the solution
+dotnet build MLAstroRPA_TPPA.slnx -c Release -tl:off
 ```
 
 > Uninstall any previous separate installations of the old `MLAstro Robotic Polar Alignment`

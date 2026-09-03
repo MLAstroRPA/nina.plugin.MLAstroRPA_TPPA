@@ -2,8 +2,9 @@
 
   <!--
     MLAstroRPA + TPPA merged NINA plugin.
-    Single plugin assembly "NINA.Plugins.PolarAlignment" (kept from the TPPA base project so all
-    TPPA internal pack: URIs stay valid). Display name comes from AssemblyTitle = "MLAstroRPA+TPPA".
+    Single plugin assembly "NINA.Plugins.MLAstroRPA_TPPA" (renamed from the TPPA base
+    "NINA.Plugins.PolarAlignment"; code namespaces + RootNamespace stay "NINA.Plugins.PolarAlignment").
+    Display name comes from AssemblyTitle = "MLAstroRPA+TPPA".
     PluginId (GUID) = 1352D162-2E66-4F80-A05B-854F021DB913 (UNIQUE, distinct from standalone TPPA
     1de8d7d3-f11e-494c-a371-95cb48dffa18 so NINA treats them as separate plugins).
   -->
@@ -15,6 +16,14 @@
     <UseWPF>true</UseWPF>
     <ImportWindowsDesktopTargets>true</ImportWindowsDesktopTargets>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
+
+    <!-- File renamed to MLAstroRPA_TPPA.csproj. AssemblyName = NINA.Plugins.MLAstroRPA_TPPA so the
+         plugin DLL is NINA.Plugins.MLAstroRPA_TPPA.dll (all pack URIs embedding the assembly token
+         were updated to match). RootNamespace stays NINA.Plugins.PolarAlignment because the code keeps
+         the TPPA namespaces and generated names must stay valid (e.g. NINA.Plugins.PolarAlignment.Properties
+         and the embedded Locale resource NINA.Plugins.PolarAlignment.Locale.Locale). -->
+    <AssemblyName>NINA.Plugins.MLAstroRPA_TPPA</AssemblyName>
+    <RootNamespace>NINA.Plugins.PolarAlignment</RootNamespace>
 
     <AssemblyTitle>MLAstroRPA+TPPA</AssemblyTitle>
     <Title>MLAstroRPA+TPPA</Title>

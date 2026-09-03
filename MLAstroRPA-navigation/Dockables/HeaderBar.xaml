@@ -87,7 +87,7 @@
 
             <!-- Brand Info -->
             <StackPanel Grid.Column="0" Orientation="Horizontal">
-                <Image Source="pack://application:,,,/NINA.Plugins.PolarAlignment;component/MLAstroRPA-navigation/Resources/MLAstro_logo.png"
+                <Image Source="pack://application:,,,/NINA.Plugins.MLAstroRPA_TPPA;component/MLAstroRPA-navigation/Resources/MLAstro_logo.png"
                        Width="72"
                        Height="72"
                        Stretch="Uniform"

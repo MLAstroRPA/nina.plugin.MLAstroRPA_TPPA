@@ -1,7 +1,7 @@
 # Copilot Instructions
 
 ## Project Guidelines
-- This is the merged **MLAstroRPA+TPPA** NINA plugin (single assembly `NINA.Plugins.PolarAlignment`,
+- This is the merged **MLAstroRPA+TPPA** NINA plugin (single assembly `NINA.Plugins.MLAstroRPA_TPPA`,
   display name `MLAstroRPA+TPPA`). It combines the MLAstro Robotic Polar Alignment hardware control
   (CONTROL / CONNECTION / CONFIGURATION tabs) with the Three Point Polar Alignment (TPPA) wizard.
 - MLAstro-origin code keeps the `MLAstro_Robotic_Polar_Alignment.*` namespaces (folder `MLAstroRPA-navigation\`).

@@ -58,7 +58,7 @@ namespace NINA.Plugins.PolarAlignment.Dockables {
             // Compiled ResourceDictionaries with x:Class cannot be loaded via Source (throws
             // "Cannot re-initialize ResourceDictionary instance"), so we don't load Options.xaml here.
             var dict = new ResourceDictionary();
-            dict.Source = new Uri("NINA.Plugins.PolarAlignment;component/Resources/MLAstroTPPAIcon.xaml", UriKind.RelativeOrAbsolute);
+            dict.Source = new Uri("NINA.Plugins.MLAstroRPA_TPPA;component/Resources/MLAstroTPPAIcon.xaml", UriKind.RelativeOrAbsolute);
             ImageGeometry = (System.Windows.Media.GeometryGroup)dict["MLAstroTPPAIcon"];
             ImageGeometry.Freeze();
 
