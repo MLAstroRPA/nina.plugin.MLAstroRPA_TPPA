@@ -86,19 +86,28 @@
             </Grid.ColumnDefinitions>
 
             <!-- Brand Info -->
-            <StackPanel Grid.Column="0">
-                <TextBlock Text="MLAstro RPA" 
-                           FontSize="18" 
-                           FontWeight="Bold" 
-                           Foreground="White"/>
-                <TextBlock Text="Robotic Polar Alignment" 
-                           FontSize="11" 
-                           Foreground="#BDC3C7"
-                           Margin="0,2,0,0"/>
-                <TextBlock Text="{Binding FirmwareVersion, StringFormat=Firmware {0}}" 
-                           FontSize="11" 
-                           Foreground="#BDC3C7"
-                           Margin="0,2,0,0"/>
+            <StackPanel Grid.Column="0" Orientation="Horizontal">
+                <Image Source="pack://application:,,,/NINA.Plugins.PolarAlignment;component/MLAstro/Resources/MRPA-on.png"
+                       Width="44"
+                       Height="44"
+                       Stretch="Uniform"
+                       RenderOptions.BitmapScalingMode="HighQuality"
+                       Margin="0,0,12,0"
+                       VerticalAlignment="Center"/>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="MLAstro RPA" 
+                               FontSize="18" 
+                               FontWeight="Bold" 
+                               Foreground="White"/>
+                    <TextBlock Text="Robotic Polar Alignment" 
+                               FontSize="11" 
+                               Foreground="#BDC3C7"
+                               Margin="0,2,0,0"/>
+                    <TextBlock Text="{Binding FirmwareVersion, StringFormat=Firmware {0}}" 
+                               FontSize="11" 
+                               Foreground="#BDC3C7"
+                               Margin="0,2,0,0"/>
+                </StackPanel>
             </StackPanel>
 
             <!-- Status Info -->
