@@ -1,0 +1,77 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    MLAstroRPA + TPPA merged NINA plugin.
+    Single plugin assembly "NINA.Plugins.PolarAlignment" (kept from the TPPA base project so all
+    TPPA internal pack: URIs stay valid). Display name comes from AssemblyTitle = "MLAstroRPA+TPPA".
+    PluginId (GUID) = TPPA's 1de8d7d3-f11e-494c-a371-95cb48dffa18 (see Properties/AssemblyInfo.cs).
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows7.0</TargetFramework>
+    <OutputType>Library</OutputType>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <UseWPF>true</UseWPF>
+    <ImportWindowsDesktopTargets>true</ImportWindowsDesktopTargets>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+
+    <AssemblyTitle>MLAstroRPA+TPPA</AssemblyTitle>
+    <Title>MLAstroRPA+TPPA</Title>
+    <Product>MLAstroRPA</Product>
+    <Company>MLAstro</Company>
+    <Authors>MLAstro</Authors>
+    <Description>MLAstroRPA+TPPA - single NINA plugin combining the MLAstro Robotic Polar Alignment
+hardware control (CONTROL / CONNECTION / CONFIGURATION) with the Three Point Polar Alignment wizard,
+sequencer instruction and polar alignment assistant.</Description>
+    <Copyright>Copyright © 2021-2026</Copyright>
+    <Version>2.3.0.0</Version>
+    <AssemblyVersion>2.3.0.0</AssemblyVersion>
+    <FileVersion>2.3.0.0</FileVersion>
+    <InformationalVersion>2.3.0.0</InformationalVersion>
+
+    <!-- CS0618: NINA exposes obsolete RelayCommand/AsyncCommand contracts that the plugin uses
+         deliberately. NU1701: older packages (ToastNotifications/FreeImage) restored for net8.0.
+         MSB3277: System.Text.Json 8.0 vs 9.0 conflict from third-party NINA.PlateSolving.dll.
+         CS8632: MLAstro-origin code uses nullable annotations ('?') while the merged project keeps
+         Nullable disabled (TPPA base) - annotations are harmless, suppress the warning. -->
+    <NoWarn>$(NoWarn);CS0618;NU1701;MSB3277;CS8632</NoWarn>
+
+    <!-- Single-DLL plugin output -->
+    <RunPostBuildEvent>OnOutputUpdated</RunPostBuildEvent>
+    <DisableFastUpToDateCheck>true</DisableFastUpToDateCheck>
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NINA.Plugin" Version="3.1.2.9001" />
+    <!-- Compile-time only; NINA supplies the runtime copies (single-DLL plugin). -->
+    <PackageReference Include="System.IO.Ports" Version="8.0.0" ExcludeAssets="runtime" />
+    <PackageReference Include="System.Management" Version="8.0.0" ExcludeAssets="runtime" />
+    <PackageReference Include="System.ComponentModel.Composition" Version="8.0.0" ExcludeAssets="runtime" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Update="Properties\Settings.Designer.cs">
+      <DesignTimeSharedInput>True</DesignTimeSharedInput>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Settings.settings</DependentUpon>
+    </Compile>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="Properties\Settings.settings">
+      <Generator>SettingsSingleFileGenerator</Generator>
+      <LastGenOutput>Settings.Designer.cs</LastGenOutput>
+    </None>
+  </ItemGroup>
+
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+    <!-- Stop NINA (all configurations) so the plugin DLL file handle is released before it is
+         copied over. 2>nul suppresses the benign "process not found" warning. -->
+    <Exec IgnoreExitCode="true" Command="taskkill /f /im NINA.exe 2>nul" />
+    <Exec IgnoreExitCode="true" Command="powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;for ($i=0; $i -lt 50; $i++) { if (-not (Get-Process -Name NINA -ErrorAction SilentlyContinue)) { break }; Start-Sleep -Milliseconds 200 }&quot;" />
+    <Exec IgnoreExitCode="true" Command="&#xD;&#xA;if not exist &quot;%25localappdata%25\NINA\Plugins&quot; (&#xD;&#xA;    echo &quot;Creating Plugins %25localappdata%25\NINA\Plugins folder&quot;&#xD;&#xA;    mkdir  &quot;%25localappdata%25\NINA\Plugins&quot;&#xD;&#xA;)&#xD;&#xA;&#xD;&#xA;if exist &quot;%25localappdata%25\NINA\Plugins\3.0.0\MLAstroRPA-TPPA&quot; (&#xD;&#xA;    echo &quot; folder cleanup&quot;&#xD;&#xA;    rmdir &quot;%25localappdata%25\NINA\Plugins\3.0.0\MLAstroRPA-TPPA&quot; /S /Q&#xD;&#xA;)&#xD;&#xA;&#xD;&#xA;if not exist &quot;%25localappdata%25\NINA\Plugins\3.0.0\MLAstroRPA-TPPA&quot; (&#xD;&#xA;    echo &quot;Creating %25localappdata%25\NINA\Plugins\3.0.0\MLAstroRPA-TPPA folder&quot;&#xD;&#xA;    mkdir  &quot;%25localappdata%25\NINA\Plugins\3.0.0\MLAstroRPA-TPPA&quot;&#xD;&#xA;)&#xD;&#xA;echo &quot;Copying $(TargetFileName)&quot;&#xD;&#xA;copy &quot;$(TargetDir)$(TargetFileName)&quot; &quot;%25localappdata%25\NINA\Plugins\3.0.0\MLAstroRPA-TPPA\$(TargetName)$(TargetExt)&quot; /Y&#xD;&#xA;" />
+  </Target>
+</Project>

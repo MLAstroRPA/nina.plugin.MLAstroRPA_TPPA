@@ -1,0 +1,331 @@
+﻿using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.ComponentModel.Composition;
+using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Windows.Input;
+using System.Windows.Media;
+using NINA.Core;
+using NINA.Core.MyMessageBox;
+using NINA.Core.Utility;
+using NINA.Plugin;
+using NINA.Plugin.Interfaces;
+using NINA.Plugins.PolarAlignment.Avalon;
+using NINA.Plugins.PolarAlignment.OAPA;
+using NINA.Plugins.PolarAlignment.MLAstroRPA;
+using NINA.Profile;
+using NINA.Profile.Interfaces;
+using MLAstro_Robotic_Polar_Alignment.Dockables;
+using MLAstro_Robotic_Polar_Alignment.Plugin;
+using MLAstro_Robotic_Polar_Alignment.Services;
+// NOTE: MLAstro_Robotic_Polar_Alignment.Settings.PluginSettings is referenced fully-qualified below
+// because NINA.Profile also exposes a PluginSettings type (otherwise ambiguous).
+
+namespace NINA.Plugins.PolarAlignment {
+    [Export(typeof(IPluginManifest))]
+    public class PolarAlignmentPlugin : PluginBase, INotifyPropertyChanged {
+        public static UniversalPolarAlignmentVM UniversalPolarAlignmentVM { get; private set; }
+        public static UniversalPolarAlignmentOAPAVM UniversalPolarAlignmentOAPAVM { get; private set; }
+        public static UniversalPolarAlignmentMLAstroRPAVM UniversalPolarAlignmentMLAstroRPAVM { get; private set; }
+
+        public static IPolarAlignmentSystemVM ActiveAlignmentSystemVM =>
+            Properties.Settings.Default.SelectedPolarAlignmentSystem switch {
+                "UPAS" => UniversalPolarAlignmentVM,
+                "OAPA" => UniversalPolarAlignmentOAPAVM,
+                "MLAstroRPA" => UniversalPolarAlignmentMLAstroRPAVM,
+                _ => null
+            };
+
+        /// <summary>
+        /// Handler do DockablePolarAlignmentVM đăng ký để dừng toàn bộ routine PA
+        /// (hủy executeCTS) khi có yêu cầu dừng từ bên ngoài (plugin MLAstro).
+        /// </summary>
+        public static Action ExternalStopHandler { get; set; }
+
+        /// <summary>
+        /// MLAstro options/state controller backing the CONTROL / CONNECTION / CONFIGURATION tabs of
+        /// the merged options page. DataContext for those tabs is this instance's MLAstro property.
+        /// </summary>
+        public MLAstroController MLAstro { get; private set; }
+
+        /// <summary>
+        /// API dừng dành cho plugin ngoài (MLAstro) - cùng process NINA - gọi qua reflection
+        /// hoặc qua kênh stop của MLAstro: dừng driver đang chạy + hủy routine PA của Dockable.
+        /// </summary>
+        public static void RequestStopFromExternal(string reason) {
+            try { Logger.Info($"[TPPA] External STOP requested: {reason}"); } catch { }
+            try { ActiveAlignmentSystemVM?.Abort(CancellationToken.None); } catch (Exception) { }
+            try { ExternalStopHandler?.Invoke(); } catch (Exception) { }
+        }
+
+        public PolarAlignmentSystemType SelectedPolarAlignmentSystem {
+            get {
+                return Enum.TryParse<PolarAlignmentSystemType>(Properties.Settings.Default.SelectedPolarAlignmentSystem, out var result)
+                    ? result : PolarAlignmentSystemType.None;
+            }
+            set {
+                Properties.Settings.Default.SelectedPolarAlignmentSystem = value.ToString();
+                CoreUtil.SaveSettings(Properties.Settings.Default);
+                RaisePropertyChanged();
+                RaisePropertyChanged(nameof(IsSystemSelected));
+                RaisePropertyChanged(nameof(IsUPASSelected));
+                RaisePropertyChanged(nameof(IsOAPASelected));
+                RaisePropertyChanged(nameof(IsMLAstroRPASelected));
+                RaisePropertyChanged(nameof(ActiveSystem));
+            }
+        }
+
+        public bool IsSystemSelected => SelectedPolarAlignmentSystem != PolarAlignmentSystemType.None;
+        public bool IsUPASSelected => SelectedPolarAlignmentSystem == PolarAlignmentSystemType.UPAS;
+        public bool IsOAPASelected => SelectedPolarAlignmentSystem == PolarAlignmentSystemType.OAPA;
+        public bool IsMLAstroRPASelected => SelectedPolarAlignmentSystem == PolarAlignmentSystemType.MLAstroRPA;
+
+        /// <summary>Instance wrapper for XAML binding with PropertyChanged support.</summary>
+        public IPolarAlignmentSystemVM ActiveSystem => ActiveAlignmentSystemVM;
+
+        public static string PluginId { get; private set; }
+
+        [ImportingConstructor]
+        public PolarAlignmentPlugin(IProfileService profileService,
+            global::MLAstro_Robotic_Polar_Alignment.Settings.PluginSettings settings,
+            SerialConnectionService serialConnectionService,
+            PolarAlignmentDockVM polarAlignmentDockVM) {
+            if (Properties.Settings.Default.UpdateSettings) {
+                Properties.Settings.Default.Upgrade();
+                Properties.Settings.Default.UpdateSettings = false;
+                CoreUtil.SaveSettings(Properties.Settings.Default);
+            }
+            ResetSettingsCommand = new GalaSoft.MvvmLight.Command.RelayCommand(ResetSettings);
+            UniversalPolarAlignmentVM = new UniversalPolarAlignmentVM(profileService);
+            UniversalPolarAlignmentOAPAVM = new UniversalPolarAlignmentOAPAVM(profileService);
+            UniversalPolarAlignmentMLAstroRPAVM = new UniversalPolarAlignmentMLAstroRPAVM(profileService);
+            PluginId = this.Identifier;
+
+            // The MLAstroRPA system VM shares the SerialConnectionService external-control API so the
+            // TPPA wizard can borrow the COM port exactly as before, but now directly (same assembly).
+            MLAstro = new MLAstroController(settings, serialConnectionService, polarAlignmentDockVM);
+        }
+
+        public override Task Teardown() {
+            Logger.Info("[MLAstroRPA+TPPA] PolarAlignmentPlugin.Teardown");
+            try { MLAstro?.Dispose(); } catch (Exception ex) { Logger.Error(ex); }
+            try { ExternalStopHandler = null; } catch (Exception) { }
+            return Task.CompletedTask;
+        }
+
+        public ICommand ResetSettingsCommand { get; }
+
+        private void ResetSettings() {
+            try {
+                if(MyMessageBox.Show($"This will reset all TPPA settings to their defaults. {Environment.NewLine}Are you sure?", "Reset All Settings", System.Windows.MessageBoxButton.YesNo, System.Windows.MessageBoxResult.No) == System.Windows.MessageBoxResult.Yes) {
+                    Properties.Settings.Default.Reset();
+                    CoreUtil.SaveSettings(Properties.Settings.Default);
+                    RaisePropertyChanged(null);
+                    UniversalPolarAlignmentVM.RaiseAllPropertiesChanged();
+                    UniversalPolarAlignmentOAPAVM.RaiseAllPropertiesChanged();
+                    UniversalPolarAlignmentMLAstroRPAVM.RaiseAllPropertiesChanged();
+                }
+            } catch(Exception ex) {
+                Logger.Error(ex);
+            }
+            
+        }
+
+        public bool DefaultEastDirection {
+            get {
+                return Properties.Settings.Default.DefaultEastDirection;
+            }
+            set {
+                Properties.Settings.Default.DefaultEastDirection = value;
+                CoreUtil.SaveSettings(Properties.Settings.Default);
+                RaisePropertyChanged();
+            }
+        }
+
+        public bool RefractionAdjustment {
+            get {
+                return Properties.Settings.Default.RefractionAdjustment;
+            }
+            set {
+                Properties.Settings.Default.RefractionAdjustment = value;
+                CoreUtil.SaveSettings(Properties.Settings.Default);
+                RaisePropertyChanged();
+            }
+        }
+
+        public double DefaultMoveRate {
+            get {
+                return Properties.Settings.Default.DefaultMoveRate;
+            }
+            set {
+                Properties.Settings.Default.DefaultMoveRate = value;
+                CoreUtil.SaveSettings(Properties.Settings.Default);
+                RaisePropertyChanged();
+            }
+        }
+
+        public int DefaultTargetDistance {
+            get {
+                return Properties.Settings.Default.DefaultTargetDistance;
+            }
+            set {
+                Properties.Settings.Default.DefaultTargetDistance = value;
+                CoreUtil.SaveSettings(Properties.Settings.Default);
+                RaisePropertyChanged();
+            }
+        }
+
+        public double DefaultSearchRadius {
+            get {
+                return Properties.Settings.Default.DefaultSearchRadius;
+            }
+            set {
+                Properties.Settings.Default.DefaultSearchRadius = Math.Max(30, Math.Min(180, value)); ;
+                CoreUtil.SaveSettings(Properties.Settings.Default);
+                RaisePropertyChanged();
+            }
+        }
+
+        public double DefaultAltitudeOffset {
+            get {
+                return Properties.Settings.Default.DefaultAltitudeOffset;
+            }
+            set {
+                Properties.Settings.Default.DefaultAltitudeOffset = value;
+                CoreUtil.SaveSettings(Properties.Settings.Default);
+                RaisePropertyChanged();
+            }
+        }
+
+        public double DefaultAzimuthOffset {
+            get {
+                return Properties.Settings.Default.DefaultAzimuthOffset;
+            }
+            set {
+                Properties.Settings.Default.DefaultAzimuthOffset = value;
+                CoreUtil.SaveSettings(Properties.Settings.Default);
+                RaisePropertyChanged();
+            }
+        }
+
+        public double MoveTimeoutFactor {
+            get {
+                return Properties.Settings.Default.MoveTimeoutFactor;
+            }
+            set {
+                Properties.Settings.Default.MoveTimeoutFactor = value;
+                CoreUtil.SaveSettings(Properties.Settings.Default);
+                RaisePropertyChanged();
+            }
+        }
+        
+        public Color AltitudeErrorColor {
+            get {
+                return Properties.Settings.Default.AltitudeErrorColor;
+            }
+            set {
+                Properties.Settings.Default.AltitudeErrorColor = value;
+                CoreUtil.SaveSettings(Properties.Settings.Default);
+                RaisePropertyChanged();
+            }
+        }
+
+        public Color AzimuthErrorColor {
+            get {
+                return Properties.Settings.Default.AzimuthErrorColor;
+            }
+            set {
+                Properties.Settings.Default.AzimuthErrorColor = value;
+                CoreUtil.SaveSettings(Properties.Settings.Default);
+                RaisePropertyChanged();
+            }
+        }
+
+        public Color TotalErrorColor {
+            get {
+                return Properties.Settings.Default.TotalErrorColor;
+            }
+            set {
+                Properties.Settings.Default.TotalErrorColor = value;
+                CoreUtil.SaveSettings(Properties.Settings.Default);
+                RaisePropertyChanged();
+            }
+        }
+        
+        public Color TargetCircleColor {
+            get {
+                return Properties.Settings.Default.TargetCircleColor;
+            }
+            set {
+                Properties.Settings.Default.TargetCircleColor = value;
+                CoreUtil.SaveSettings(Properties.Settings.Default);
+                RaisePropertyChanged();
+            }
+        }
+        public Color SuccessColor {
+            get {
+                return Properties.Settings.Default.SuccessColor;
+            }
+            set {
+                Properties.Settings.Default.SuccessColor = value;
+                CoreUtil.SaveSettings(Properties.Settings.Default);
+                RaisePropertyChanged();
+            }
+        }
+
+        public double AlignmentTolerance {
+            get {
+                return Properties.Settings.Default.AlignmentTolerance;
+            }
+            set {
+                if(value < 0) { value = 0; }
+                Properties.Settings.Default.AlignmentTolerance = value;
+                CoreUtil.SaveSettings(Properties.Settings.Default);
+                RaisePropertyChanged();
+            }
+        }
+
+        public bool LogError {
+            get {
+                return Properties.Settings.Default.LogError;
+            }
+            set {
+                Properties.Settings.Default.LogError = value;
+                CoreUtil.SaveSettings(Properties.Settings.Default);
+                RaisePropertyChanged();
+            }
+        }
+
+        public bool StopTrackingWhenDone {
+            get {
+                return Properties.Settings.Default.StopTrackingWhenDone;
+            }
+            set {
+                Properties.Settings.Default.StopTrackingWhenDone = value;
+                CoreUtil.SaveSettings(Properties.Settings.Default);
+                RaisePropertyChanged();
+            }
+        }
+
+        public bool AutoPause {
+            get {
+                return Properties.Settings.Default.AutoPause;
+            }
+            set {
+                Properties.Settings.Default.AutoPause = value;
+                CoreUtil.SaveSettings(Properties.Settings.Default);
+                RaisePropertyChanged();
+            }
+        }
+
+        public event PropertyChangedEventHandler PropertyChanged;
+        protected void RaisePropertyChanged([CallerMemberName] string propertyName = null) {
+            this.PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+
+    }
+}

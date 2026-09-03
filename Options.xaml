@@ -1,0 +1,1861 @@
+﻿<ResourceDictionary
+    x:Class="NINA.Plugins.PolarAlignment.Options"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:avalon="clr-namespace:NINA.Plugins.PolarAlignment.Avalon"
+    xmlns:oapa="clr-namespace:NINA.Plugins.PolarAlignment.OAPA"
+    xmlns:behavior="clr-namespace:NINA.WPF.Base.Behaviors;assembly=NINA.WPF.Base"
+    xmlns:converters="clr-namespace:NINA.Plugins.PolarAlignment.Converters"
+    xmlns:coreconverters="clr-namespace:NINA.Core.Utility.Converters;assembly=NINA.Core"
+    xmlns:local="clr-namespace:NINA.Plugins.PolarAlignment"
+    xmlns:ninactrl="clr-namespace:NINA.CustomControlLibrary;assembly=NINA.CustomControlLibrary"
+    xmlns:ns="clr-namespace:NINA.Core.Locale;assembly=NINA.Core"
+    xmlns:properties="clr-namespace:NINA.Plugins.PolarAlignment.Properties"
+    xmlns:rules="clr-namespace:NINA.Core.Utility.ValidationRules;assembly=NINA.Core"
+    xmlns:s="clr-namespace:System;assembly=mscorlib"
+    xmlns:util="clr-namespace:NINA.Core.Utility;assembly=NINA.Core"
+    xmlns:xceed="http://schemas.xceed.com/wpf/xaml/toolkit"
+    xmlns:view="clr-namespace:MLAstro_Robotic_Polar_Alignment.Dockables">
+    <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+    <coreconverters:InverseBooleanToVisibilityCollapsedConverter x:Key="InverseBooleanToVisibilityConverter" />
+    <coreconverters:BooleanToVisibilityHiddenConverter x:Key="BooleanToVisibilityHiddenConverter" />
+    <s:String x:Key="AlignmentSystemConnectToolTip">Creates the selected hardware system, scans available serial ports for a matching device, and starts status polling.</s:String>
+    <s:String x:Key="AlignmentSystemDisconnectToolTip">Disposes the current hardware connection and stops status polling.</s:String>
+    <s:String x:Key="MLAstroRPAOvershootEnabledToolTip">When enabled, the Alt axis corrects the full 100% of the error and then moves a fixed overshoot amount past the target for the selected direction(s).</s:String>
+    <s:String x:Key="MLAstroRPAOvershootUpToolTip">When the Alt axis must correct upwards (as shown on screen), move the full 100% of the error plus the configured overshoot amount past the target. Range: 0–240 arcminutes (0 = correct the full error with no overshoot).</s:String>
+    <s:String x:Key="MLAstroRPAOvershootDownToolTip">When the Alt axis must correct downwards (as shown on screen), move the full 100% of the error plus the configured overshoot amount past the target. Range: 0–240 arcminutes (0 = correct the full error with no overshoot).</s:String>
+    <s:String x:Key="MLAstroRPAEnableAutoReverseToolTip">When enabled, the plugin automatically reverses an axis when it detects the mount moving the wrong way, so the two manual Reverse toggles below are disabled. When disabled (default), only the Reverse Azimuth / Reverse Altitude toggles set the direction.</s:String>
+    <s:String x:Key="MLAstroRPADetectDirectionToolTip">While auto-reverse is enabled, the very first nudge only moves this percentage of the required correction so the plugin can detect whether the axis direction is correct before committing the full move. Range: 1–100 %.</s:String>
+    <s:String x:Key="MLAstroRPACorrectionFactorToolTip">Safety factor applied to the automated correction moves (Azimuth axis always, and Altitude axis when overshoot is not used for that direction). 100 % corrects the full measured error; lower values correct only a percentage of it. Range: 1–100 % (default 75).</s:String>
+    <DataTemplate x:Key="MLAstroRPA+TPPA_Options">
+        <DockPanel>
+            <view:HeaderBar DockPanel.Dock="Top"
+                            Panel.ZIndex="10"
+                            DataContext="{Binding MLAstro.PolarizationVM}" />
+            <TabControl>
+                <TabItem Header="TPPA OPTION">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <TextBlock VerticalAlignment="Center" Text="Default Move Rate" />
+                <TextBox
+                    Grid.Column="1"
+                    MinWidth="80"
+                    Margin="5,0,0,0"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    Text="{Binding DefaultMoveRate}" />
+                <TextBlock
+                    Grid.Row="1"
+                    Margin="0,5,0,0"
+                    VerticalAlignment="Center"
+                    Text="Default East Direction" />
+                <CheckBox
+                    Grid.Row="1"
+                    Grid.Column="1"
+                    MinWidth="80"
+                    Margin="0,5,0,0"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    IsChecked="{Binding DefaultEastDirection}" />
+                <TextBlock
+                    Grid.Row="2"
+                    Margin="0,5,0,0"
+                    VerticalAlignment="Center"
+                    Text="Default Target Distance" />
+
+                <ninactrl:UnitTextBox
+                    Grid.Row="2"
+                    Grid.Column="1"
+                    MinWidth="80"
+                    Margin="5,5,0,0"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    Text="{Binding DefaultTargetDistance}"
+                    Unit="°" />
+                <TextBlock
+                    Grid.Row="3"
+                    Margin="0,5,0,0"
+                    VerticalAlignment="Center"
+                    Text="Default Search Radius" />
+                <ninactrl:UnitTextBox
+                    Grid.Row="3"
+                    Grid.Column="1"
+                    MinWidth="80"
+                    Margin="5,5,0,0"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    Text="{Binding DefaultSearchRadius}"
+                    Unit="°" />
+
+                <TextBlock
+                    Grid.Row="4"
+                    Margin="0,5,0,0"
+                    VerticalAlignment="Center"
+                    Text="Axis move timeout factor" />
+                <ninactrl:UnitTextBox
+                    Grid.Row="4"
+                    Grid.Column="1"
+                    MinWidth="80"
+                    Margin="5,5,0,0"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    Text="{Binding MoveTimeoutFactor}"
+                    Unit="x" />
+
+                <TextBlock
+                    Grid.Row="5"
+                    Margin="0,5,0,0"
+                    VerticalAlignment="Center"
+                    Text="Default azimuth offset from pole" />
+                <ninactrl:UnitTextBox
+                    Grid.Row="5"
+                    Grid.Column="1"
+                    MinWidth="80"
+                    Margin="5,5,0,0"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    Text="{Binding DefaultAzimuthOffset}"
+                    Unit="°" />
+
+                <TextBlock
+                    Grid.Row="6"
+                    Margin="0,5,0,0"
+                    VerticalAlignment="Center"
+                    Text="Default altitude offset from pole" />
+                <ninactrl:UnitTextBox
+                    Grid.Row="6"
+                    Grid.Column="1"
+                    MinWidth="80"
+                    Margin="5,5,0,0"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    Text="{Binding DefaultAltitudeOffset}"
+                    Unit="°" />
+
+                <TextBlock
+                    Grid.Row="7"
+                    Margin="0,5,0,0"
+                    VerticalAlignment="Center"
+                    Text="Default Alignment Tolerance">
+                    <TextBlock.ToolTip>
+                        <TextBlock Text="Setting the Polar Alignment Tolerance to non-zero will specify a tolerance in arcminutes where the polar alignment routine automatically completes when below the threshold" />
+                    </TextBlock.ToolTip>
+                </TextBlock>
+                <ninactrl:UnitTextBox
+                    Grid.Row="7"
+                    Grid.Column="1"
+                    MinWidth="80"
+                    Margin="5,5,0,0"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    Text="{Binding AlignmentTolerance}"
+                    Unit="arcmin" />
+
+                <TextBlock
+                    Grid.Row="8"
+                    Margin="0,5,0,0"
+                    VerticalAlignment="Center"
+                    Text="Altitude Error Color" />
+                <xceed:ColorPicker
+                    Grid.Row="8"
+                    Grid.Column="1"
+                    Width="80"
+                    Margin="5,5,0,0"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    SelectedColor="{Binding AltitudeErrorColor}" />
+                <TextBlock
+                    Grid.Row="9"
+                    VerticalAlignment="Center"
+                    Text="Azimuth Error Color" />
+                <xceed:ColorPicker
+                    Grid.Row="9"
+                    Grid.Column="1"
+                    Width="80"
+                    Margin="5,0,0,0"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    SelectedColor="{Binding AzimuthErrorColor}" />
+                <TextBlock
+                    Grid.Row="10"
+                    VerticalAlignment="Center"
+                    Text="Total Error Color" />
+                <xceed:ColorPicker
+                    Grid.Row="10"
+                    Grid.Column="1"
+                    Width="80"
+                    Margin="5,0,0,0"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    SelectedColor="{Binding TotalErrorColor}" />
+                <TextBlock
+                    Grid.Row="11"
+                    VerticalAlignment="Center"
+                    Text="Target Circle Color" />
+                <xceed:ColorPicker
+                    Grid.Row="11"
+                    Grid.Column="1"
+                    Width="80"
+                    Margin="5,0,0,0"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    SelectedColor="{Binding TargetCircleColor}" />
+                <TextBlock
+                    Grid.Row="12"
+                    VerticalAlignment="Center"
+                    Text="Sucessful Step Color" />
+                <xceed:ColorPicker
+                    Grid.Row="12"
+                    Grid.Column="1"
+                    Width="80"
+                    Margin="5,0,0,0"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    SelectedColor="{Binding SuccessColor}" />
+                <TextBlock
+                    Grid.Row="13"
+                    VerticalAlignment="Center"
+                    Text="Log polar alignment error adjustments?" />
+                <CheckBox
+                    Grid.Row="13"
+                    Grid.Column="1"
+                    MinWidth="80"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    IsChecked="{Binding LogError}" />
+                <TextBlock
+                    Grid.Row="14"
+                    Margin="0,5,0,0"
+                    VerticalAlignment="Center"
+                    Text="Adjust for refraction?" />
+                <StackPanel
+                    Grid.Row="14"
+                    Grid.Column="1"
+                    Orientation="Horizontal">
+                    <CheckBox
+                        MinWidth="80"
+                        Margin="0,5,0,0"
+                        HorizontalAlignment="Left"
+                        VerticalAlignment="Center"
+                        IsChecked="{Binding RefractionAdjustment}" />
+                    <TextBlock
+                        Margin="5,5,0,0"
+                        Text="This option is currently under test. Feedback if this results in better polar alignment is appreciated!"
+                        Visibility="{Binding RefractionAdjustment, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                </StackPanel>
+                <TextBlock
+                    Grid.Row="15"
+                    Margin="0,5,0,0"
+                    VerticalAlignment="Center"
+                    Text="Stop Tracking when done?" />
+                <CheckBox
+                    Grid.Row="15"
+                    Grid.Column="1"
+                    MinWidth="80"
+                    Margin="0,5,0,0"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    IsChecked="{Binding StopTrackingWhenDone}" />
+                <TextBlock
+                    Grid.Row="16"
+                    Margin="0,5,0,0"
+                    VerticalAlignment="Center"
+                    Text="Auto pause between continuous exposures?" />
+                <CheckBox
+                    Grid.Row="16"
+                    Grid.Column="1"
+                    MinWidth="80"
+                    Margin="0,5,0,0"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    IsChecked="{Binding AutoPause}" />
+                <TextBlock
+                    Grid.Row="17"
+                    Margin="0,5,0,0"
+                    VerticalAlignment="Center"
+                    Text="Polar Alignment System" />
+                <ComboBox
+                    Grid.Row="17"
+                    Grid.Column="1"
+                    MinWidth="80"
+                    Margin="0,5,0,0"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    SelectedValue="{Binding SelectedPolarAlignmentSystem}">
+                    <ComboBox.ItemsSource>
+                        <x:Array Type="{x:Type local:PolarAlignmentSystemType}">
+                            <local:PolarAlignmentSystemType>None</local:PolarAlignmentSystemType>
+                            <local:PolarAlignmentSystemType>MLAstroRPA</local:PolarAlignmentSystemType>
+                        </x:Array>
+                    </ComboBox.ItemsSource>
+                </ComboBox>
+                <TextBlock
+                    Grid.Row="18"
+                    Margin="0,5,0,0"
+                    VerticalAlignment="Center"
+                    Text="Enable auto-reverse"
+                    ToolTip="{StaticResource MLAstroRPAEnableAutoReverseToolTip}"
+                    Visibility="{Binding IsMLAstroRPASelected, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                <CheckBox
+                    Grid.Row="18"
+                    Grid.Column="1"
+                    MinWidth="80"
+                    Margin="0,5,0,0"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    IsChecked="{Binding ActiveSystem.EnableAutoReverse}"
+                    ToolTip="{StaticResource MLAstroRPAEnableAutoReverseToolTip}"
+                    Visibility="{Binding IsMLAstroRPASelected, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                <TextBlock
+                    Grid.Row="19"
+                    Margin="0,5,0,0"
+                    VerticalAlignment="Center"
+                    Text="Detecting direction offset"
+                    ToolTip="{StaticResource MLAstroRPADetectDirectionToolTip}"
+                    Visibility="{Binding IsMLAstroRPASelected, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                <ninactrl:UnitTextBox
+                    Grid.Row="19"
+                    Grid.Column="1"
+                    MinWidth="80"
+                    Margin="0,5,0,0"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    IsEnabled="{Binding ActiveSystem.EnableAutoReverse}"
+                    Text="{Binding ActiveSystem.MLAstroRPAReverseDetectPercent}"
+                    ToolTip="{StaticResource MLAstroRPADetectDirectionToolTip}"
+                    Unit="%"
+                    Visibility="{Binding IsMLAstroRPASelected, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                <TextBlock
+                    Grid.Row="20"
+                    Margin="0,5,0,0"
+                    VerticalAlignment="Center"
+                    Text="Reverse Azimuth Axis?"
+                    Visibility="{Binding IsSystemSelected, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                <CheckBox
+                    Grid.Row="20"
+                    Grid.Column="1"
+                    MinWidth="80"
+                    Margin="0,5,0,0"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    IsChecked="{Binding ActiveSystem.ReverseAzimuth}"
+                    IsEnabled="{Binding ActiveSystem.ManualReverseEnabled}"
+                    Visibility="{Binding IsSystemSelected, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                <TextBlock
+                    Grid.Row="21"
+                    Margin="0,5,0,0"
+                    VerticalAlignment="Center"
+                    Text="Reverse Altitude Axis?"
+                    Visibility="{Binding IsSystemSelected, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                <CheckBox
+                    Grid.Row="21"
+                    Grid.Column="1"
+                    MinWidth="80"
+                    Margin="0,5,0,0"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    IsChecked="{Binding ActiveSystem.ReverseAltitude}"
+                    IsEnabled="{Binding ActiveSystem.ManualReverseEnabled}"
+                    Visibility="{Binding IsSystemSelected, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                <TextBlock
+                    Grid.Row="22"
+                    Margin="0,5,0,0"
+                    VerticalAlignment="Center"
+                    Text="Azimuth backlash compensation"
+                    Visibility="{Binding IsSystemSelected, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                <ninactrl:UnitTextBox
+                    Grid.Row="22"
+                    Grid.Column="1"
+                    MinWidth="80"
+                    Margin="0,5,0,0"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    Text="{Binding ActiveSystem.XBacklashCompensation}"
+                    Unit="steps"
+                    Visibility="{Binding IsSystemSelected, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                <TextBlock
+                    Grid.Row="23"
+                    Margin="0,5,0,0"
+                    VerticalAlignment="Center"
+                    Text="Correction Safety Factor"
+                    ToolTip="{StaticResource MLAstroRPACorrectionFactorToolTip}"
+                    Visibility="{Binding IsMLAstroRPASelected, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                <ninactrl:UnitTextBox
+                    Grid.Row="23"
+                    Grid.Column="1"
+                    MinWidth="80"
+                    Margin="0,5,0,0"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    Text="{Binding ActiveSystem.MLAstroRPACorrectionFactorPercent}"
+                    ToolTip="{StaticResource MLAstroRPACorrectionFactorToolTip}"
+                    Unit="%"
+                    Visibility="{Binding IsMLAstroRPASelected, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                <TextBlock
+                    Grid.Row="24"
+                    Margin="0,5,0,0"
+                    VerticalAlignment="Center"
+                    Text="Do automated adjustments?"
+                    Visibility="{Binding IsSystemSelected, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                <StackPanel
+                    Grid.Row="24"
+                    Grid.Column="1"
+                    Orientation="Horizontal">
+                    <CheckBox
+                        MinWidth="80"
+                        Margin="0,5,0,0"
+                        HorizontalAlignment="Left"
+                        VerticalAlignment="Center"
+                        IsChecked="{Binding ActiveSystem.DoAutomatedAdjustments}"
+                        Visibility="{Binding IsSystemSelected, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                    <Grid Visibility="{Binding IsSystemSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <TextBlock
+                            Margin="5,5,0,0"
+                            VerticalAlignment="Center"
+                            FontStyle="Italic"
+                            Text="This option is under test and experimental"
+                            Visibility="{Binding ActiveSystem.DoAutomatedAdjustments, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                    </Grid>
+                </StackPanel>
+                <Grid Grid.Row="25" Visibility="{Binding IsSystemSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <TextBlock
+                        Margin="0,5,0,0"
+                        VerticalAlignment="Center"
+                        Text="Automated adjustment settle time"
+                        Visibility="{Binding ActiveSystem.DoAutomatedAdjustments, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                </Grid>
+                <Grid
+                    Grid.Row="25"
+                    Grid.Column="1"
+                    Visibility="{Binding IsSystemSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <ninactrl:UnitTextBox
+                        MinWidth="80"
+                        Margin="5,5,0,0"
+                        HorizontalAlignment="Left"
+                        VerticalAlignment="Center"
+                        Text="{Binding ActiveSystem.AutomatedAdjustmentSettleTime}"
+                        Unit="s"
+                        Visibility="{Binding ActiveSystem.DoAutomatedAdjustments, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                </Grid>
+                <Grid
+                    Grid.Row="26"
+                    Grid.ColumnSpan="2"
+                    Visibility="{Binding IsSystemSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <TextBlock
+                        Margin="0,5,0,0"
+                        FontStyle="Italic"
+                        Text="Make sure to set your gear ratio to achieve 1 arcminute per step for each axis!"
+                        Visibility="{Binding ActiveSystem.DoAutomatedAdjustments, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                </Grid>
+                <Button
+                    Grid.Row="27"
+                    Margin="0,20,0,0"
+                    Command="{Binding ResetSettingsCommand}">
+                    <TextBlock
+                        VerticalAlignment="Center"
+                        Foreground="{StaticResource ButtonForegroundBrush}"
+                        Text="Reset All Settings" />
+                </Button>
+            </Grid>
+            <GroupBox
+                Grid.Row="1"
+                Margin="0,10,0,0"
+                Header="Avalon Polar Alignment System"
+                Visibility="{Binding IsUPASSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <Grid Margin="0,10,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition />
+                    </Grid.RowDefinitions>
+                    <Grid DataContext="{Binding UniversalPolarAlignmentVM}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition />
+                            <ColumnDefinition />
+                        </Grid.ColumnDefinitions>
+                        <Button Command="{Binding ConnectCommand}" Visibility="{Binding Connected, Converter={StaticResource InverseBooleanToVisibilityCollapsedConverter}}">Test Connect</Button>
+                        <Button Command="{Binding DisconnectCommand}" Visibility="{Binding Connected, Converter={StaticResource BooleanToVisibilityConverter}}">Disconnect</Button>
+                    </Grid>
+                    <ContentPresenter Grid.Row="1" Content="{Binding UniversalPolarAlignmentVM}" />
+                </Grid>
+            </GroupBox>
+            <GroupBox
+                Grid.Row="2"
+                Margin="0,10,0,0"
+                Header="OAPA Polar Alignment System"
+                Visibility="{Binding IsOAPASelected, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <Grid Margin="0,10,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition />
+                    </Grid.RowDefinitions>
+                    <Grid DataContext="{Binding UniversalPolarAlignmentOAPAVM}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition />
+                            <ColumnDefinition />
+                        </Grid.ColumnDefinitions>
+                        <Button Command="{Binding ConnectCommand}" Visibility="{Binding Connected, Converter={StaticResource InverseBooleanToVisibilityCollapsedConverter}}">Test Connect</Button>
+                        <Button Command="{Binding DisconnectCommand}" Visibility="{Binding Connected, Converter={StaticResource BooleanToVisibilityConverter}}">Disconnect</Button>
+                    </Grid>
+                    <ContentPresenter Grid.Row="1" Content="{Binding UniversalPolarAlignmentOAPAVM}" />
+                </Grid>
+            </GroupBox>
+            <GroupBox
+                Grid.Row="3"
+                Margin="0,10,0,0"
+                Header="MLAstro Robotic Polar Alignment System"
+                Visibility="{Binding IsMLAstroRPASelected, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <Grid Margin="0,10,0,0" Grid.IsSharedSizeScope="True">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition />
+                    </Grid.RowDefinitions>
+                    <Grid DataContext="{Binding UniversalPolarAlignmentMLAstroRPAVM}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition />
+                            <ColumnDefinition />
+                        </Grid.ColumnDefinitions>
+                        <Button
+                            Command="{Binding ConnectCommand}"
+                            ToolTip="{StaticResource AlignmentSystemConnectToolTip}"
+                            Visibility="{Binding Connected, Converter={StaticResource InverseBooleanToVisibilityCollapsedConverter}}">
+                            Test Connect
+                        </Button>
+                        <Button
+                            Command="{Binding DisconnectCommand}"
+                            ToolTip="{StaticResource AlignmentSystemDisconnectToolTip}"
+                            Visibility="{Binding Connected, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            Disconnect
+                        </Button>
+                    </Grid>
+                    <Grid
+                        Grid.Row="1"
+                        Margin="0,5,0,0"
+                        DataContext="{Binding UniversalPolarAlignmentMLAstroRPAVM}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" SharedSizeGroup="OvershootLabel" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock
+                            VerticalAlignment="Center"
+                            Text="Enable overshoot"
+                            ToolTip="{StaticResource MLAstroRPAOvershootEnabledToolTip}" />
+                        <CheckBox
+                            Grid.Column="1"
+                            MinWidth="80"
+                            Margin="5,0,0,0"
+                            VerticalAlignment="Center"
+                            IsChecked="{Binding MLAstroRPAOvershootEnabled}"
+                            ToolTip="{StaticResource MLAstroRPAOvershootEnabledToolTip}" />
+                    </Grid>
+                    <Grid
+                        Grid.Row="2"
+                        Margin="0,5,0,0"
+                        DataContext="{Binding UniversalPolarAlignmentMLAstroRPAVM}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" SharedSizeGroup="OvershootLabel" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock
+                            VerticalAlignment="Center"
+                            Text="Run overshoot for moving Up"
+                            ToolTip="{StaticResource MLAstroRPAOvershootUpToolTip}" />
+                        <CheckBox
+                            Grid.Column="1"
+                            MinWidth="80"
+                            Margin="5,0,0,0"
+                            VerticalAlignment="Center"
+                            IsEnabled="{Binding MLAstroRPAOvershootEnabled}"
+                            IsChecked="{Binding MLAstroRPAOvershootUp}"
+                            ToolTip="{StaticResource MLAstroRPAOvershootUpToolTip}" />
+                        <ninactrl:UnitTextBox
+                            Grid.Column="2"
+                            MinWidth="70"
+                            Margin="5,0,0,0"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Center"
+                            IsEnabled="{Binding MLAstroRPAOvershootEnabled}"
+                            Text="{Binding MLAstroRPAOvershootUpArcMin}"
+                            Unit="arcmin" />
+                    </Grid>
+                    <Grid
+                        Grid.Row="3"
+                        Margin="0,5,0,0"
+                        DataContext="{Binding UniversalPolarAlignmentMLAstroRPAVM}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" SharedSizeGroup="OvershootLabel" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock
+                            VerticalAlignment="Center"
+                            Text="Run overshoot for moving Down"
+                            ToolTip="{StaticResource MLAstroRPAOvershootDownToolTip}" />
+                        <CheckBox
+                            Grid.Column="1"
+                            MinWidth="80"
+                            Margin="5,0,0,0"
+                            VerticalAlignment="Center"
+                            IsEnabled="{Binding MLAstroRPAOvershootEnabled}"
+                            IsChecked="{Binding MLAstroRPAOvershootDown}"
+                            ToolTip="{StaticResource MLAstroRPAOvershootDownToolTip}" />
+                        <ninactrl:UnitTextBox
+                            Grid.Column="2"
+                            MinWidth="70"
+                            Margin="5,0,0,0"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Center"
+                            IsEnabled="{Binding MLAstroRPAOvershootEnabled}"
+                            Text="{Binding MLAstroRPAOvershootDownArcMin}"
+                            Unit="arcmin" />
+                    </Grid>
+                    <TextBlock
+                        Grid.Row="5"
+                        Margin="0,8,0,0"
+                        Foreground="Green"
+                        TextWrapping="Wrap"
+                        Text="{Binding UniversalPolarAlignmentMLAstroRPAVM.TestConnectStatus}" />
+                </Grid>
+            </GroupBox>
+
+        </Grid>
+                </TabItem>
+                <TabItem Header="CONTROL">
+                    <view:PolarAlignmentDockable DataContext="{Binding MLAstro.PolarizationVM}" />
+                </TabItem>
+                <TabItem Header="CONNECTION">
+                    <ContentControl Content="{Binding MLAstro}" ContentTemplate="{DynamicResource MlaConnectionBody}" />
+                </TabItem>
+                <TabItem Header="CONFIGURATION" IsEnabled="{Binding MLAstro.IsExternalUnlocked}">
+                    <ContentControl Content="{Binding MLAstro}" ContentTemplate="{DynamicResource MlaConfigurationBody}" />
+                </TabItem>
+            </TabControl>
+        </DockPanel>
+    </DataTemplate>
+
+
+    <GeometryGroup x:Key="ThreePointsSVG">
+        <PathGeometry Figures="M 339.151,73.308C 269.4,71.1613 198.531,92.2653 139.088,138.213L 152.948,156.156C 279.145,58.6093 460.145,81.5319 558.047,207.453L 558.036,207.453C 655.911,333.396 633.463,514.453 507.791,612.677L 521.755,630.552C 657.067,524.792 681.328,329.141 575.948,193.537C 516.656,117.271 428.828,76.068 339.151,73.308 Z " />
+        <PathGeometry Figures="M 1.39872e-005,144.041L 90.348,187.36L 105.891,286.349L 175.004,213.803L 273.948,229.615L 226.317,141.469L 271.927,52.256L 262.5,53.9799L 173.375,70.3173L 102.615,-0.634766L 89.3427,98.6826M 21.3747,143.797L 98.0573,104.865L 109.457,19.6199L 170.187,80.516L 254.785,65.0106L 215.624,141.595L 256.509,217.256L 171.588,203.677L 112.26,265.943L 98.9267,180.984" />
+        <PathGeometry Figures="M 566.052,456.797L 492.244,535.932L 385.219,520L 437.681,614.641L 389.452,711.505L 495.676,690.871L 572.9,766.667L 573.984,757.833L 586.088,659.261L 682.041,609.235L 583.968,563.505M 560.333,475.797L 576.077,569.516L 662.203,609.683L 577.937,653.609L 566.348,747.928L 498.531,681.365L 405.244,699.495L 447.599,614.423L 401.531,531.308L 495.525,545.292" />
+        <PathGeometry Figures="M 474.588,69.016L 489.853,165.037L 419.405,232.047L 515.437,247.204L 557.4,334.901L 601.489,248.251L 697.864,235.443L 690.187,227.771L 629.083,166.74L 646.681,71.1199L 560.083,115.313M 488.572,88.7813L 559.937,127.417L 632.213,90.5373L 617.52,170.333L 674.932,227.683L 594.5,238.365L 557.697,310.688L 522.676,237.495L 442.525,224.844L 501.317,168.917" />
+    </GeometryGroup>
+
+    <SolidColorBrush x:Key="AltitudeErrorColor" Color="{Binding Source={x:Static properties:Settings.Default}, Path=AltitudeErrorColor}" />
+    <SolidColorBrush x:Key="AzimuthErrorColor" Color="{Binding Source={x:Static properties:Settings.Default}, Path=AzimuthErrorColor}" />
+    <SolidColorBrush x:Key="TotalErrorColor" Color="{Binding Source={x:Static properties:Settings.Default}, Path=TotalErrorColor}" />
+    <SolidColorBrush x:Key="TargetCircleColor" Color="{Binding Source={x:Static properties:Settings.Default}, Path=TargetCircleColor}" />
+    <SolidColorBrush x:Key="SuccessColor" Color="{Binding Source={x:Static properties:Settings.Default}, Path=SuccessColor}" />
+    <converters:PointToCircleParameterConverter x:Key="PointToCircleParameterConverter" />
+    <converters:InvertCanvasBoundsConverter x:Key="InvertCanvasBoundsConverter" />
+    <converters:ClipToScaleConverter x:Key="ClipToScaleConverter" />
+    <converters:ErrorDetailToClipPathSegmentCollectionConverter x:Key="ErrorDetailToClipPathSegmentCollectionConverter" />
+    <converters:AddToDoubleConverter x:Key="AddToDoubleConverter" />
+    <coreconverters:BooleanToVisibilityCollapsedConverter x:Key="VisibilityConverter" />
+    <coreconverters:InverseBooleanToVisibilityCollapsedConverter x:Key="InverseBooleanToVisibilityCollapsedConverter" />
+    <coreconverters:NullToVisibilityCollapsedConverter x:Key="NullToVisibilityCollapsedConverter" />
+
+
+    <DataTemplate DataType="{x:Type local:TPAPAVM}">
+        <Grid Margin="5">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition />
+                <ColumnDefinition />
+                <ColumnDefinition />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <Grid Grid.Row="0" Grid.Column="0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition />
+                </Grid.RowDefinitions>
+                <Border
+                    Grid.Row="0"
+                    BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="0,0,0,1">
+                    <Grid Margin="0,0,5,0" HorizontalAlignment="Stretch">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Viewbox
+                            Grid.Row="1"
+                            Stretch="Uniform"
+                            StretchDirection="DownOnly">
+                            <TextBlock FontSize="16" Text="{Binding Status.Status}" />
+                        </Viewbox>
+                        <Grid
+                            Grid.Row="2"
+                            Height="20"
+                            MinWidth="100"
+                            Margin="0,5,0,0"
+                            DataContext="{Binding Status}">
+                            <ProgressBar
+                                x:Name="pbProgress"
+                                Height="20"
+                                VerticalAlignment="Center"
+                                Maximum="{Binding MaxProgress}"
+                                Minimum="0"
+                                Value="{Binding Progress}" />
+                            <StackPanel
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Orientation="Horizontal">
+                                <TextBlock VerticalAlignment="Center" Text="{Binding ElementName=pbProgress, Path=Value, StringFormat=\{0:#%\}}" />
+                                <StackPanel.Style>
+                                    <Style TargetType="StackPanel">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ProgressType}" Value="1">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </StackPanel.Style>
+                            </StackPanel>
+                            <StackPanel
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Orientation="Horizontal">
+                                <TextBlock VerticalAlignment="Center" Text="{Binding ElementName=pbProgress, Path=Value, StringFormat=\{0:#\}}" />
+                                <TextBlock VerticalAlignment="Center" Text=" / " />
+                                <TextBlock VerticalAlignment="Center" Text="{Binding ElementName=pbProgress, Path=Maximum}" />
+                                <StackPanel.Style>
+                                    <Style TargetType="StackPanel">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ProgressType}" Value="0">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </StackPanel.Style>
+                            </StackPanel>
+                            <Grid.Style>
+                                <Style TargetType="Grid">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Progress}" Value="-1">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Grid.Style>
+                        </Grid>
+                        <Grid>
+                            <ItemsControl ItemsSource="{Binding Steps}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Height="25" Visibility="{Binding Relevant, Converter={StaticResource VisibilityConverter}}">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly">
+                                                <TextBlock
+                                                    VerticalAlignment="Center"
+                                                    FontSize="14"
+                                                    Text="{Binding Name}"
+                                                    Visibility="{Binding Completed, Converter={StaticResource InverseBooleanToVisibilityCollapsedConverter}}" />
+                                            </Viewbox>
+                                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly">
+                                                <TextBlock
+                                                    VerticalAlignment="Center"
+                                                    FontSize="14"
+                                                    Foreground="{StaticResource SuccessColor}"
+                                                    Text="{Binding Name}"
+                                                    Visibility="{Binding Completed, Converter={StaticResource VisibilityConverter}}" />
+                                            </Viewbox>
+                                            <ninactrl:LoadingControl
+                                                Grid.Column="1"
+                                                Margin="2.5"
+                                                VerticalAlignment="Stretch"
+                                                LoadingImageBrush="{StaticResource PrimaryBrush}"
+                                                Visibility="{Binding Active, Converter={StaticResource VisibilityConverter}}" />
+                                            <Path
+                                                Grid.Column="1"
+                                                Margin="2.5"
+                                                VerticalAlignment="Stretch"
+                                                Data="{StaticResource CheckedCircledSVG}"
+                                                Fill="{StaticResource SuccessColor}"
+                                                Stretch="Uniform"
+                                                Visibility="{Binding Completed, Converter={StaticResource VisibilityConverter}}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Grid>
+                    </Grid>
+                </Border>
+                <Border
+                    x:Name="PART_MiniBorder"
+                    Grid.Row="2"
+                    Grid.Column="1"
+                    Grid.ColumnSpan="2"
+                    BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="0,0,0,1">
+                    <Grid>
+                        <Viewbox Stretch="Uniform">
+                            <Canvas
+                                x:Name="PART_MiniCanvas"
+                                Width="{Binding ActualWidth, ElementName=PART_MiniImage}"
+                                Height="{Binding ActualHeight, ElementName=PART_MiniImage}"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                ClipToBounds="True">
+                                <Canvas.Background>
+                                    <VisualBrush>
+                                        <VisualBrush.Visual>
+                                            <Image
+                                                x:Name="PART_MiniImage"
+                                                RenderOptions.BitmapScalingMode="HighQuality"
+                                                Source="{Binding Image.Image}"
+                                                Stretch="Uniform" />
+                                        </VisualBrush.Visual>
+                                    </VisualBrush>
+                                </Canvas.Background>
+
+                                <!--  Total Error  -->
+                                <Line
+                                    Stroke="{StaticResource TotalErrorColor}"
+                                    StrokeThickness="3"
+                                    X1="{Binding ErrorDetail.Origin.X}"
+                                    X2="{Binding ErrorDetail.Total.X}"
+                                    Y1="{Binding ErrorDetail.Origin.Y}"
+                                    Y2="{Binding ErrorDetail.Total.Y}" />
+
+                                <!--  Destination Circle  -->
+                                <!--  30 Arcsec Circle  -->
+                                <Ellipse
+                                    Stroke="{StaticResource TargetCircleColor}"
+                                    StrokeThickness="3"
+                                    Visibility="{Binding ErrorDetail, Converter={StaticResource NullToVisibilityCollapsedConverter}}">
+                                    <Canvas.Left>
+                                        <MultiBinding Converter="{StaticResource PointToCircleParameterConverter}" ConverterParameter="X1|30">
+                                            <Binding Path="ErrorDetail.Total" />
+                                            <Binding Path="ArcsecPerPix" />
+                                        </MultiBinding>
+                                    </Canvas.Left>
+                                    <Canvas.Top>
+                                        <MultiBinding Converter="{StaticResource PointToCircleParameterConverter}" ConverterParameter="Y1|30">
+                                            <Binding Path="ErrorDetail.Total" />
+                                            <Binding Path="ArcsecPerPix" />
+                                        </MultiBinding>
+                                    </Canvas.Top>
+                                    <Ellipse.Width>
+                                        <MultiBinding Converter="{StaticResource PointToCircleParameterConverter}" ConverterParameter="X2|30">
+                                            <Binding Path="ErrorDetail.Total" />
+                                            <Binding Path="ArcsecPerPix" />
+                                        </MultiBinding>
+                                    </Ellipse.Width>
+                                    <Ellipse.Height>
+                                        <MultiBinding Converter="{StaticResource PointToCircleParameterConverter}" ConverterParameter="Y2|30">
+                                            <Binding Path="ErrorDetail.Total" />
+                                            <Binding Path="ArcsecPerPix" />
+                                        </MultiBinding>
+                                    </Ellipse.Height>
+                                </Ellipse>
+
+                                <!--  1 Arcmin Circle  -->
+                                <Ellipse
+                                    Stroke="{StaticResource TargetCircleColor}"
+                                    StrokeDashArray="3 1"
+                                    StrokeThickness="3"
+                                    Visibility="{Binding ErrorDetail, Converter={StaticResource NullToVisibilityCollapsedConverter}}">
+
+                                    <Canvas.Left>
+                                        <MultiBinding Converter="{StaticResource PointToCircleParameterConverter}" ConverterParameter="X1|60">
+                                            <Binding Path="ErrorDetail.Total" />
+                                            <Binding Path="ArcsecPerPix" />
+                                        </MultiBinding>
+                                    </Canvas.Left>
+                                    <Canvas.Top>
+                                        <MultiBinding Converter="{StaticResource PointToCircleParameterConverter}" ConverterParameter="Y1|60">
+                                            <Binding Path="ErrorDetail.Total" />
+                                            <Binding Path="ArcsecPerPix" />
+                                        </MultiBinding>
+                                    </Canvas.Top>
+                                    <Ellipse.Width>
+                                        <MultiBinding Converter="{StaticResource PointToCircleParameterConverter}" ConverterParameter="X2|60">
+                                            <Binding Path="ErrorDetail.Total" />
+                                            <Binding Path="ArcsecPerPix" />
+                                        </MultiBinding>
+                                    </Ellipse.Width>
+                                    <Ellipse.Height>
+                                        <MultiBinding Converter="{StaticResource PointToCircleParameterConverter}" ConverterParameter="Y2|60">
+                                            <Binding Path="ErrorDetail.Total" />
+                                            <Binding Path="ArcsecPerPix" />
+                                        </MultiBinding>
+                                    </Ellipse.Height>
+                                </Ellipse>
+
+                                <!--  5 Arcmin Circle  -->
+                                <Ellipse
+                                    Stroke="{StaticResource TargetCircleColor}"
+                                    StrokeDashArray="1"
+                                    StrokeThickness="3"
+                                    Visibility="{Binding ErrorDetail, Converter={StaticResource NullToVisibilityCollapsedConverter}}">
+                                    <Canvas.Left>
+                                        <MultiBinding Converter="{StaticResource PointToCircleParameterConverter}" ConverterParameter="X1|300">
+                                            <Binding Path="ErrorDetail.Total" />
+                                            <Binding Path="ArcsecPerPix" />
+                                        </MultiBinding>
+                                    </Canvas.Left>
+                                    <Canvas.Top>
+                                        <MultiBinding Converter="{StaticResource PointToCircleParameterConverter}" ConverterParameter="Y1|300">
+                                            <Binding Path="ErrorDetail.Total" />
+                                            <Binding Path="ArcsecPerPix" />
+                                        </MultiBinding>
+                                    </Canvas.Top>
+                                    <Ellipse.Width>
+                                        <MultiBinding Converter="{StaticResource PointToCircleParameterConverter}" ConverterParameter="X2|300">
+                                            <Binding Path="ErrorDetail.Total" />
+                                            <Binding Path="ArcsecPerPix" />
+                                        </MultiBinding>
+                                    </Ellipse.Width>
+                                    <Ellipse.Height>
+                                        <MultiBinding Converter="{StaticResource PointToCircleParameterConverter}" ConverterParameter="Y2|300">
+                                            <Binding Path="ErrorDetail.Total" />
+                                            <Binding Path="ArcsecPerPix" />
+                                        </MultiBinding>
+                                    </Ellipse.Height>
+                                </Ellipse>
+
+                                <!--  X Starting point  -->
+                                <Line
+                                    Stroke="{StaticResource TargetCircleColor}"
+                                    StrokeThickness="3"
+                                    X1="{Binding ErrorDetail.Origin.X, Converter={StaticResource AddToDoubleConverter}, ConverterParameter=-10}"
+                                    X2="{Binding ErrorDetail.Origin.X, Converter={StaticResource AddToDoubleConverter}, ConverterParameter=10}"
+                                    Y1="{Binding ErrorDetail.Origin.Y, Converter={StaticResource AddToDoubleConverter}, ConverterParameter=-10}"
+                                    Y2="{Binding ErrorDetail.Origin.Y, Converter={StaticResource AddToDoubleConverter}, ConverterParameter=10}" />
+                                <Line
+                                    Stroke="{StaticResource TargetCircleColor}"
+                                    StrokeThickness="3"
+                                    X1="{Binding ErrorDetail.Origin.X, Converter={StaticResource AddToDoubleConverter}, ConverterParameter=-10}"
+                                    X2="{Binding ErrorDetail.Origin.X, Converter={StaticResource AddToDoubleConverter}, ConverterParameter=10}"
+                                    Y1="{Binding ErrorDetail.Origin.Y, Converter={StaticResource AddToDoubleConverter}, ConverterParameter=10}"
+                                    Y2="{Binding ErrorDetail.Origin.Y, Converter={StaticResource AddToDoubleConverter}, ConverterParameter=-10}" />
+
+                                <!--  Altitude Error  -->
+                                <Line
+                                    Stroke="{StaticResource AltitudeErrorColor}"
+                                    StrokeThickness="3"
+                                    X1="{Binding ErrorDetail.Origin.X}"
+                                    X2="{Binding ErrorDetail.Altitude.X}"
+                                    Y1="{Binding ErrorDetail.Origin.Y}"
+                                    Y2="{Binding ErrorDetail.Altitude.Y}" />
+                                <Line
+                                    Stroke="{StaticResource AltitudeErrorColor}"
+                                    StrokeThickness="3"
+                                    X1="{Binding ErrorDetail.Azimuth.X}"
+                                    X2="{Binding ErrorDetail.Total.X}"
+                                    Y1="{Binding ErrorDetail.Azimuth.Y}"
+                                    Y2="{Binding ErrorDetail.Total.Y}" />
+
+                                <!--  Azimuth Error  -->
+                                <Line
+                                    Stroke="{StaticResource AzimuthErrorColor}"
+                                    StrokeThickness="3"
+                                    X1="{Binding ErrorDetail.Altitude.X}"
+                                    X2="{Binding ErrorDetail.Total.X}"
+                                    Y1="{Binding ErrorDetail.Altitude.Y}"
+                                    Y2="{Binding ErrorDetail.Total.Y}" />
+                                <Line
+                                    Stroke="{StaticResource AzimuthErrorColor}"
+                                    StrokeThickness="3"
+                                    X1="{Binding ErrorDetail.Origin.X}"
+                                    X2="{Binding ErrorDetail.Azimuth.X}"
+                                    Y1="{Binding ErrorDetail.Origin.Y}"
+                                    Y2="{Binding ErrorDetail.Azimuth.Y}" />
+                                <Canvas.Clip>
+                                    <PathGeometry Figures="{Binding ErrorDetail, Converter={StaticResource ErrorDetailToClipPathSegmentCollectionConverter}}" />
+                                </Canvas.Clip>
+                                <Canvas.RenderTransform>
+                                    <TransformGroup>
+                                        <TranslateTransform X="{Binding Clip.Bounds, ElementName=PART_MiniCanvas, Converter={StaticResource InvertCanvasBoundsConverter}, ConverterParameter=Left}" Y="{Binding Clip.Bounds, ElementName=PART_MiniCanvas, Converter={StaticResource InvertCanvasBoundsConverter}, ConverterParameter=Top}" />
+                                        <ScaleTransform>
+
+                                            <ScaleTransform.ScaleX>
+                                                <MultiBinding Converter="{StaticResource ClipToScaleConverter}">
+                                                    <Binding ElementName="PART_MiniCanvas" Path="Width" />
+                                                    <Binding ElementName="PART_MiniCanvas" Path="Clip.Bounds" />
+                                                </MultiBinding>
+                                            </ScaleTransform.ScaleX>
+
+                                            <ScaleTransform.ScaleY>
+                                                <MultiBinding Converter="{StaticResource ClipToScaleConverter}">
+                                                    <Binding ElementName="PART_MiniCanvas" Path="Height" />
+                                                    <Binding ElementName="PART_MiniCanvas" Path="Clip.Bounds" />
+                                                </MultiBinding>
+                                            </ScaleTransform.ScaleY>
+                                        </ScaleTransform>
+                                    </TransformGroup>
+                                </Canvas.RenderTransform>
+                            </Canvas>
+                        </Viewbox>
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <Border
+                x:Name="PART_Border"
+                Grid.Row="0"
+                Grid.Column="1"
+                Grid.ColumnSpan="2"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="1,0,0,1">
+                <Grid>
+                    <Path
+                        Width="100"
+                        Height="100"
+                        Margin="5"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Data="{StaticResource ThreePointsSVG}"
+                        Fill="{DynamicResource ButtonForegroundDisabledBrush}"
+                        Opacity="0.4"
+                        Stretch="Uniform" />
+                    <Viewbox Stretch="Uniform">
+                        <Canvas
+                            Width="{Binding ActualWidth, ElementName=PART_Image}"
+                            Height="{Binding ActualHeight, ElementName=PART_Image}"
+                            behavior:MouseCommandBehavior.Enabled="True"
+                            behavior:MouseCommandBehavior.LeftMouseDownCommand="{Binding LeftMouseButtonDownCommand}"
+                            ClipToBounds="True">
+                            <Canvas.Background>
+                                <VisualBrush>
+                                    <VisualBrush.Visual>
+                                        <Image
+                                            x:Name="PART_Image"
+                                            RenderOptions.BitmapScalingMode="HighQuality"
+                                            Source="{Binding Image.Image}"
+                                            Stretch="Uniform" />
+                                    </VisualBrush.Visual>
+                                </VisualBrush>
+                            </Canvas.Background>
+
+                            <!--<Polygon
+                                behavior:DragCommandBehavior.Drag="False"
+                                behavior:DragCommandBehavior.DragMoveCommand="{Binding DragMoveCommand}"
+                                Fill="Black"
+                                Opacity="0.05"
+                                Points="{Binding ErrorDetail.Rectangle}" />-->
+
+                            <!--  Total Error  -->
+                            <Line
+                                Stroke="{StaticResource TotalErrorColor}"
+                                StrokeThickness="3"
+                                X1="{Binding ErrorDetail.Origin.X}"
+                                X2="{Binding ErrorDetail.Total.X}"
+                                Y1="{Binding ErrorDetail.Origin.Y}"
+                                Y2="{Binding ErrorDetail.Total.Y}" />
+
+                            <!--  Destination Circle  -->
+                            <!--  30 Arcsec Circle  -->
+                            <Ellipse
+                                Stroke="{StaticResource TargetCircleColor}"
+                                StrokeThickness="3"
+                                Visibility="{Binding ErrorDetail, Converter={StaticResource NullToVisibilityCollapsedConverter}}">
+
+                                <Canvas.Left>
+                                    <MultiBinding Converter="{StaticResource PointToCircleParameterConverter}" ConverterParameter="X1|30">
+                                        <Binding Path="ErrorDetail.Total" />
+                                        <Binding Path="ArcsecPerPix" />
+                                    </MultiBinding>
+                                </Canvas.Left>
+                                <Canvas.Top>
+                                    <MultiBinding Converter="{StaticResource PointToCircleParameterConverter}" ConverterParameter="Y1|30">
+                                        <Binding Path="ErrorDetail.Total" />
+                                        <Binding Path="ArcsecPerPix" />
+                                    </MultiBinding>
+                                </Canvas.Top>
+                                <Ellipse.Width>
+                                    <MultiBinding Converter="{StaticResource PointToCircleParameterConverter}" ConverterParameter="X2|30">
+                                        <Binding Path="ErrorDetail.Total" />
+                                        <Binding Path="ArcsecPerPix" />
+                                    </MultiBinding>
+                                </Ellipse.Width>
+                                <Ellipse.Height>
+                                    <MultiBinding Converter="{StaticResource PointToCircleParameterConverter}" ConverterParameter="Y2|30">
+                                        <Binding Path="ErrorDetail.Total" />
+                                        <Binding Path="ArcsecPerPix" />
+                                    </MultiBinding>
+                                </Ellipse.Height>
+
+                            </Ellipse>
+
+                            <!--  1 Arcmin Circle  -->
+                            <Ellipse
+                                Stroke="{StaticResource TargetCircleColor}"
+                                StrokeDashArray="3 1"
+                                StrokeThickness="3"
+                                Visibility="{Binding ErrorDetail, Converter={StaticResource NullToVisibilityCollapsedConverter}}">
+                                <Canvas.Left>
+                                    <MultiBinding Converter="{StaticResource PointToCircleParameterConverter}" ConverterParameter="X1|60">
+                                        <Binding Path="ErrorDetail.Total" />
+                                        <Binding Path="ArcsecPerPix" />
+                                    </MultiBinding>
+                                </Canvas.Left>
+                                <Canvas.Top>
+                                    <MultiBinding Converter="{StaticResource PointToCircleParameterConverter}" ConverterParameter="Y1|60">
+                                        <Binding Path="ErrorDetail.Total" />
+                                        <Binding Path="ArcsecPerPix" />
+                                    </MultiBinding>
+                                </Canvas.Top>
+                                <Ellipse.Width>
+                                    <MultiBinding Converter="{StaticResource PointToCircleParameterConverter}" ConverterParameter="X2|60">
+                                        <Binding Path="ErrorDetail.Total" />
+                                        <Binding Path="ArcsecPerPix" />
+                                    </MultiBinding>
+                                </Ellipse.Width>
+                                <Ellipse.Height>
+                                    <MultiBinding Converter="{StaticResource PointToCircleParameterConverter}" ConverterParameter="Y2|60">
+                                        <Binding Path="ErrorDetail.Total" />
+                                        <Binding Path="ArcsecPerPix" />
+                                    </MultiBinding>
+                                </Ellipse.Height>
+                            </Ellipse>
+
+                            <!--  5 Arcmin Circle  -->
+                            <Ellipse
+                                Stroke="{StaticResource TargetCircleColor}"
+                                StrokeDashArray="1"
+                                StrokeThickness="3"
+                                Visibility="{Binding ErrorDetail, Converter={StaticResource NullToVisibilityCollapsedConverter}}">
+                                <Canvas.Left>
+                                    <MultiBinding Converter="{StaticResource PointToCircleParameterConverter}" ConverterParameter="X1|300">
+                                        <Binding Path="ErrorDetail.Total" />
+                                        <Binding Path="ArcsecPerPix" />
+                                    </MultiBinding>
+                                </Canvas.Left>
+                                <Canvas.Top>
+                                    <MultiBinding Converter="{StaticResource PointToCircleParameterConverter}" ConverterParameter="Y1|300">
+                                        <Binding Path="ErrorDetail.Total" />
+                                        <Binding Path="ArcsecPerPix" />
+                                    </MultiBinding>
+                                </Canvas.Top>
+                                <Ellipse.Width>
+                                    <MultiBinding Converter="{StaticResource PointToCircleParameterConverter}" ConverterParameter="X2|300">
+                                        <Binding Path="ErrorDetail.Total" />
+                                        <Binding Path="ArcsecPerPix" />
+                                    </MultiBinding>
+                                </Ellipse.Width>
+                                <Ellipse.Height>
+                                    <MultiBinding Converter="{StaticResource PointToCircleParameterConverter}" ConverterParameter="Y2|300">
+                                        <Binding Path="ErrorDetail.Total" />
+                                        <Binding Path="ArcsecPerPix" />
+                                    </MultiBinding>
+                                </Ellipse.Height>
+                            </Ellipse>
+
+                            <!--  X Starting point  -->
+                            <Line
+                                Stroke="{StaticResource TargetCircleColor}"
+                                StrokeThickness="3"
+                                X1="{Binding ErrorDetail.Origin.X, Converter={StaticResource AddToDoubleConverter}, ConverterParameter=-10}"
+                                X2="{Binding ErrorDetail.Origin.X, Converter={StaticResource AddToDoubleConverter}, ConverterParameter=10}"
+                                Y1="{Binding ErrorDetail.Origin.Y, Converter={StaticResource AddToDoubleConverter}, ConverterParameter=-10}"
+                                Y2="{Binding ErrorDetail.Origin.Y, Converter={StaticResource AddToDoubleConverter}, ConverterParameter=10}" />
+                            <Line
+                                Stroke="{StaticResource TargetCircleColor}"
+                                StrokeThickness="3"
+                                X1="{Binding ErrorDetail.Origin.X, Converter={StaticResource AddToDoubleConverter}, ConverterParameter=-10}"
+                                X2="{Binding ErrorDetail.Origin.X, Converter={StaticResource AddToDoubleConverter}, ConverterParameter=10}"
+                                Y1="{Binding ErrorDetail.Origin.Y, Converter={StaticResource AddToDoubleConverter}, ConverterParameter=10}"
+                                Y2="{Binding ErrorDetail.Origin.Y, Converter={StaticResource AddToDoubleConverter}, ConverterParameter=-10}" />
+
+                            <!--  Altitude Error  -->
+                            <Line
+                                Stroke="{StaticResource AltitudeErrorColor}"
+                                StrokeThickness="3"
+                                X1="{Binding ErrorDetail.Origin.X}"
+                                X2="{Binding ErrorDetail.Altitude.X}"
+                                Y1="{Binding ErrorDetail.Origin.Y}"
+                                Y2="{Binding ErrorDetail.Altitude.Y}" />
+                            <Line
+                                Stroke="{StaticResource AltitudeErrorColor}"
+                                StrokeThickness="3"
+                                X1="{Binding ErrorDetail.Azimuth.X}"
+                                X2="{Binding ErrorDetail.Total.X}"
+                                Y1="{Binding ErrorDetail.Azimuth.Y}"
+                                Y2="{Binding ErrorDetail.Total.Y}" />
+
+                            <!--  Azimuth Error  -->
+                            <Line
+                                Stroke="{StaticResource AzimuthErrorColor}"
+                                StrokeThickness="3"
+                                X1="{Binding ErrorDetail.Altitude.X}"
+                                X2="{Binding ErrorDetail.Total.X}"
+                                Y1="{Binding ErrorDetail.Altitude.Y}"
+                                Y2="{Binding ErrorDetail.Total.Y}" />
+                            <Line
+                                Stroke="{StaticResource AzimuthErrorColor}"
+                                StrokeThickness="3"
+                                X1="{Binding ErrorDetail.Origin.X}"
+                                X2="{Binding ErrorDetail.Azimuth.X}"
+                                Y1="{Binding ErrorDetail.Origin.Y}"
+                                Y2="{Binding ErrorDetail.Azimuth.Y}" />
+
+                            <!--  Total Error  -->
+                            <Line
+                                Opacity="0.2"
+                                Stroke="{StaticResource TotalErrorColor}"
+                                StrokeThickness="3"
+                                X1="{Binding ErrorDetail2.Origin.X}"
+                                X2="{Binding ErrorDetail2.Total.X}"
+                                Y1="{Binding ErrorDetail2.Origin.Y}"
+                                Y2="{Binding ErrorDetail2.Total.Y}" />
+
+                            <!--  X Starting point  -->
+                            <Line
+                                Opacity="0.2"
+                                Stroke="{StaticResource TargetCircleColor}"
+                                StrokeThickness="3"
+                                X1="{Binding ErrorDetail2.Origin.X, Converter={StaticResource AddToDoubleConverter}, ConverterParameter=-10}"
+                                X2="{Binding ErrorDetail2.Origin.X, Converter={StaticResource AddToDoubleConverter}, ConverterParameter=10}"
+                                Y1="{Binding ErrorDetail2.Origin.Y, Converter={StaticResource AddToDoubleConverter}, ConverterParameter=-10}"
+                                Y2="{Binding ErrorDetail2.Origin.Y, Converter={StaticResource AddToDoubleConverter}, ConverterParameter=10}" />
+                            <Line
+                                Opacity="0.2"
+                                Stroke="{StaticResource TargetCircleColor}"
+                                StrokeThickness="3"
+                                X1="{Binding ErrorDetail2.Origin.X, Converter={StaticResource AddToDoubleConverter}, ConverterParameter=-10}"
+                                X2="{Binding ErrorDetail2.Origin.X, Converter={StaticResource AddToDoubleConverter}, ConverterParameter=10}"
+                                Y1="{Binding ErrorDetail2.Origin.Y, Converter={StaticResource AddToDoubleConverter}, ConverterParameter=10}"
+                                Y2="{Binding ErrorDetail2.Origin.Y, Converter={StaticResource AddToDoubleConverter}, ConverterParameter=-10}" />
+
+                            <!--  Altitude Error  -->
+                            <Line
+                                Opacity="0.2"
+                                Stroke="{StaticResource AltitudeErrorColor}"
+                                StrokeThickness="3"
+                                X1="{Binding ErrorDetail2.Origin.X}"
+                                X2="{Binding ErrorDetail2.Altitude.X}"
+                                Y1="{Binding ErrorDetail2.Origin.Y}"
+                                Y2="{Binding ErrorDetail2.Altitude.Y}" />
+                            <Line
+                                Opacity="0.2"
+                                Stroke="{StaticResource AltitudeErrorColor}"
+                                StrokeThickness="3"
+                                X1="{Binding ErrorDetail2.Azimuth.X}"
+                                X2="{Binding ErrorDetail2.Total.X}"
+                                Y1="{Binding ErrorDetail2.Azimuth.Y}"
+                                Y2="{Binding ErrorDetail2.Total.Y}" />
+
+                            <!--  Azimuth Error  -->
+                            <Line
+                                Opacity="0.2"
+                                Stroke="{StaticResource AzimuthErrorColor}"
+                                StrokeThickness="3"
+                                X1="{Binding ErrorDetail2.Altitude.X}"
+                                X2="{Binding ErrorDetail2.Total.X}"
+                                Y1="{Binding ErrorDetail2.Altitude.Y}"
+                                Y2="{Binding ErrorDetail2.Total.Y}" />
+                            <Line
+                                Opacity="0.2"
+                                Stroke="{StaticResource AzimuthErrorColor}"
+                                StrokeThickness="3"
+                                X1="{Binding ErrorDetail2.Origin.X}"
+                                X2="{Binding ErrorDetail2.Azimuth.X}"
+                                Y1="{Binding ErrorDetail2.Origin.Y}"
+                                Y2="{Binding ErrorDetail2.Azimuth.Y}" />
+                        </Canvas>
+                    </Viewbox>
+                </Grid>
+            </Border>
+
+            <!--  Text Error Details  -->
+            <Grid Grid.Row="1" Grid.ColumnSpan="3">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition />
+                    <ColumnDefinition />
+                    <ColumnDefinition />
+                </Grid.ColumnDefinitions>
+                <Border
+                    Grid.Column="0"
+                    BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="0,0,1,0">
+                    <GroupBox>
+                        <GroupBox.Header>
+                            <Viewbox
+                                Height="40"
+                                Stretch="Uniform"
+                                StretchDirection="DownOnly">
+                                <TextBlock
+                                    HorizontalAlignment="Center"
+                                    FontSize="36"
+                                    Foreground="{StaticResource AzimuthErrorColor}"
+                                    Text="Azimuth Error ⬌" />
+                            </Viewbox>
+                        </GroupBox.Header>
+
+                        <UniformGrid VerticalAlignment="Center" Rows="3">
+
+                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly">
+                                <TextBlock
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    FontSize="36"
+                                    Foreground="{StaticResource AzimuthErrorColor}"
+                                    Text="{Binding PolarErrorDetermination.CurrentMountAxisAzimuthError}" />
+                            </Viewbox>
+                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly">
+                                <TextBlock
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    FontSize="36"
+                                    Foreground="{StaticResource AzimuthErrorColor}"
+                                    Text="{Binding PolarErrorDetermination.CurrentMountAxisAzimuthErrorDirection}" />
+                            </Viewbox>
+                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly">
+                                <TextBlock
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    FontSize="16"
+                                    Foreground="{StaticResource AzimuthErrorColor}"
+                                    Text="{Binding PolarErrorDetermination.InitialMountAxisAzimuthError}" />
+                            </Viewbox>
+                        </UniformGrid>
+                    </GroupBox>
+                </Border>
+                <Border
+                    Grid.Column="1"
+                    BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="0,0,1,0">
+                    <GroupBox>
+                        <GroupBox.Header>
+                            <Viewbox
+                                Height="40"
+                                Stretch="Uniform"
+                                StretchDirection="DownOnly">
+                                <TextBlock
+                                    HorizontalAlignment="Center"
+                                    FontSize="36"
+                                    Foreground="{StaticResource AltitudeErrorColor}"
+                                    Text="Altitude Error ⬍" />
+                            </Viewbox>
+                        </GroupBox.Header>
+                        <UniformGrid VerticalAlignment="Center" Rows="3">
+                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly">
+                                <TextBlock
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    FontSize="36"
+                                    Foreground="{StaticResource AltitudeErrorColor}"
+                                    Text="{Binding PolarErrorDetermination.CurrentMountAxisAltitudeError}" />
+                            </Viewbox>
+                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly">
+                                <TextBlock
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    FontSize="36"
+                                    Foreground="{StaticResource AltitudeErrorColor}"
+                                    Text="{Binding PolarErrorDetermination.CurrentMountAxisAltitudeErrorDirection}" />
+                            </Viewbox>
+                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly">
+                                <TextBlock
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    FontSize="16"
+                                    Foreground="{StaticResource AltitudeErrorColor}"
+                                    Text="{Binding PolarErrorDetermination.InitialMountAxisAltitudeError}" />
+                            </Viewbox>
+                        </UniformGrid>
+                    </GroupBox>
+                </Border>
+                <Border
+                    Grid.Column="2"
+                    BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="0,0,0,0">
+                    <GroupBox>
+                        <GroupBox.Header>
+                            <Viewbox
+                                Height="40"
+                                Stretch="Uniform"
+                                StretchDirection="DownOnly">
+                                <TextBlock
+                                    HorizontalAlignment="Center"
+                                    FontSize="36"
+                                    Foreground="{StaticResource TotalErrorColor}"
+                                    Text="Total Error" />
+                            </Viewbox>
+                        </GroupBox.Header>
+
+                        <UniformGrid VerticalAlignment="Center" Rows="3">
+                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly">
+                                <TextBlock
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    FontSize="36"
+                                    Foreground="{StaticResource TotalErrorColor}"
+                                    Text="{Binding PolarErrorDetermination.CurrentMountAxisTotalError}" />
+                            </Viewbox>
+                            <ninactrl:LoadingControl
+                                Grid.Column="1"
+                                Width="30"
+                                Height="30"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                LoadingImageBrush="{StaticResource TotalErrorColor}"
+                                Visibility="{Binding WaitingForUpdate, Converter={StaticResource BooleanToVisibilityHiddenConverter}}" />
+
+                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly">
+                                <TextBlock
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    FontSize="16"
+                                    Foreground="{StaticResource TotalErrorColor}"
+                                    Text="{Binding PolarErrorDetermination.InitialMountAxisTotalError}" />
+                            </Viewbox>
+                        </UniformGrid>
+                    </GroupBox>
+                </Border>
+            </Grid>
+
+            <Grid
+                Grid.Row="2"
+                Grid.ColumnSpan="3"
+                Visibility="{Binding PolarErrorDetermination, Converter={StaticResource NullToVisibilityCollapsedConverter}}">
+
+                <Viewbox
+                    Height="40"
+                    Stretch="Uniform"
+                    StretchDirection="DownOnly"
+                    Visibility="{Binding PolarErrorDetermination.InitialErrorLarge, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <StackPanel Orientation="Vertical">
+                        <TextBlock HorizontalAlignment="Center" FontSize="36">
+                            Initial Polar Alignment error is large. Correction phase will be unreliable.
+                        </TextBlock>
+                        <TextBlock HorizontalAlignment="Center" FontSize="36">Please bring the mount closer to polar alignment and do another run to verify the result!</TextBlock>
+                    </StackPanel>
+
+                </Viewbox>
+
+                <Viewbox
+                    Height="40"
+                    Stretch="Uniform"
+                    StretchDirection="DownOnly"
+                    Visibility="{Binding PolarErrorDetermination.InitialErrorHuge, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <StackPanel Orientation="Vertical">
+                        <TextBlock HorizontalAlignment="Center" FontSize="36">
+                            Calculated error is huge. Either the mount is far off alignment or the polar alignment calculation was unable to determine the result.
+                        </TextBlock>
+                        <TextBlock HorizontalAlignment="Center" FontSize="36">Make sure your location is set correctly, that the mount is roughly pointing to the pole and that only the right ascension axis was moved in between the three points!</TextBlock>
+                    </StackPanel>
+
+                </Viewbox>
+            </Grid>
+            <Grid
+                Grid.Row="3"
+                Grid.ColumnSpan="4"
+                Visibility="{Binding PolarErrorDetermination, Converter={StaticResource NullToVisibilityCollapsedConverter}}">
+                <Viewbox
+                    Height="40"
+                    Stretch="Uniform"
+                    StretchDirection="DownOnly"
+                    Visibility="{Binding PolarErrorDetermination.DeclinationSpreadLarge, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock
+                            HorizontalAlignment="Center"
+                            FontSize="36"
+                            Text="Mount's reported declination changed by " />
+                        <TextBlock
+                            HorizontalAlignment="Center"
+                            FontSize="36"
+                            Text="{Binding PolarErrorDetermination.DeclinationSpreadArcsec, StringFormat=N2}" />
+                        <TextBlock
+                            HorizontalAlignment="Center"
+                            FontSize="36"
+                            Text=" arcseconds between measurements. This may affect polar alignment accuracy." />
+                    </StackPanel>
+                </Viewbox>
+            </Grid>
+            <GroupBox
+                Grid.Row="4"
+                Grid.ColumnSpan="3"
+                HorizontalAlignment="Stretch"
+                Visibility="{Binding UniversalPolarAlignmentVM.Connected, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <GroupBox.Header>
+                    <TextBlock Text="Avalon Polar Alignment System" />
+                </GroupBox.Header>
+                <Grid HorizontalAlignment="Stretch">
+                    <!--  Manual UPA Control  -->
+                    <ContentPresenter Content="{Binding UniversalPolarAlignmentVM}" Visibility="{Binding DoAutomatedAdjustments, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
+                    <!--  Automated UPA Status  -->
+                    <Grid HorizontalAlignment="Stretch" Visibility="{Binding DoAutomatedAdjustments, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition />
+                            <ColumnDefinition />
+                            <ColumnDefinition />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Orientation="Horizontal">
+                            <TextBlock FontSize="16" Text="Azimuth: " />
+                            <TextBlock
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                FontSize="16"
+                                Text="{Binding UniversalPolarAlignmentVM.PositionX, StringFormat=N2}" />
+                        </StackPanel>
+                        <StackPanel
+                            Grid.Column="1"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Orientation="Horizontal">
+                            <TextBlock FontSize="16" Text="Altitude: " />
+                            <TextBlock
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                FontSize="16"
+                                Text="{Binding UniversalPolarAlignmentVM.PositionY, StringFormat=N2}" />
+                        </StackPanel>
+                        <TextBlock
+                            Grid.Column="2"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            FontSize="16"
+                            Text="Automatic Mode" />
+                    </Grid>
+                </Grid>
+            </GroupBox>
+        </Grid>
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type avalon:UniversalPolarAlignmentVM}">
+        <Grid Visibility="{Binding Connected, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition />
+                <ColumnDefinition />
+            </Grid.ColumnDefinitions>
+            <Grid.Resources>
+                <s:Single x:Key="NegativeDotOne">-0.1</s:Single>
+                <s:Single x:Key="DotOne">0.1</s:Single>
+                <s:Single x:Key="NegativeOne">-1</s:Single>
+                <s:Single x:Key="One">1</s:Single>
+                <s:Single x:Key="NegativeTen">-10</s:Single>
+                <s:Single x:Key="Ten">10</s:Single>
+            </Grid.Resources>
+            <GroupBox Header="Azimuth">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition />
+                    </Grid.RowDefinitions>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition />
+                            <ColumnDefinition />
+                            <ColumnDefinition />
+                            <ColumnDefinition />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock VerticalAlignment="Center">Speed</TextBlock>
+                        <ComboBox
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            SelectedValue="{Binding XSpeed}">
+                            <ComboBox.ItemsSource>
+                                <x:Array Type="{x:Type s:Int32}">
+                                    <s:Int32>100</s:Int32>
+                                    <s:Int32>200</s:Int32>
+                                    <s:Int32>300</s:Int32>
+                                    <s:Int32>400</s:Int32>
+                                    <s:Int32>500</s:Int32>
+                                    <s:Int32>600</s:Int32>
+                                    <s:Int32>700</s:Int32>
+                                    <s:Int32>800</s:Int32>
+                                    <s:Int32>900</s:Int32>
+                                    <s:Int32>1000</s:Int32>
+                                </x:Array>
+                            </ComboBox.ItemsSource>
+                        </ComboBox>
+                        <TextBlock
+                            Grid.Column="2"
+                            Margin="5,0,0,0"
+                            VerticalAlignment="Center">
+                            GearRatio
+                        </TextBlock>
+                        <TextBox
+                            Grid.Column="3"
+                            VerticalAlignment="Center"
+                            Text="{Binding XGearRatio}" />
+                    </Grid>
+                    <Grid Grid.Row="1">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            FontSize="24"
+                            Text="{Binding PositionX, StringFormat=N2}" />
+                        <Grid Grid.Row="1">
+                            <Grid.RowDefinitions>
+                                <RowDefinition />
+                                <RowDefinition />
+                                <RowDefinition />
+                                <RowDefinition />
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition />
+                                <ColumnDefinition />
+                            </Grid.ColumnDefinitions>
+                            <Button
+                                Height="25"
+                                Margin="0,0,2.5,0"
+                                Command="{Binding NudgeXCommand}"
+                                CommandParameter="{StaticResource NegativeDotOne}">
+                                -0.1
+                            </Button>
+                            <Button
+                                Grid.Column="1"
+                                Height="25"
+                                Margin="2.5,0,0,0"
+                                Command="{Binding NudgeXCommand}"
+                                CommandParameter="{StaticResource DotOne}">
+                                +0.1
+                            </Button>
+                            <Button
+                                Grid.Row="1"
+                                Height="25"
+                                Margin="0,5,2.5,0"
+                                Command="{Binding NudgeXCommand}"
+                                CommandParameter="{StaticResource NegativeOne}">
+                                -1
+                            </Button>
+                            <Button
+                                Grid.Row="1"
+                                Grid.Column="1"
+                                Height="25"
+                                Margin="2.5,5,0,0"
+                                Command="{Binding NudgeXCommand}"
+                                CommandParameter="{StaticResource One}">
+                                +1
+                            </Button>
+                            <Button
+                                Grid.Row="2"
+                                Height="25"
+                                Margin="0,5,2.5,0"
+                                Command="{Binding NudgeXCommand}"
+                                CommandParameter="{StaticResource NegativeTen}">
+                                -10
+                            </Button>
+                            <Button
+                                Grid.Row="2"
+                                Grid.Column="1"
+                                Height="25"
+                                Margin="2.5,5,0,0"
+                                Command="{Binding NudgeXCommand}"
+                                CommandParameter="{StaticResource Ten}">
+                                +10
+                            </Button>
+
+                            <TextBox
+                                Grid.Row="3"
+                                Margin="0,5,2.5,0"
+                                VerticalAlignment="Center"
+                                HorizontalContentAlignment="Right"
+                                Text="{Binding TargetPositionX}" />
+                            <Button
+                                Grid.Row="3"
+                                Grid.Column="1"
+                                Height="25"
+                                Margin="2.5,5,0,0"
+                                Command="{Binding MoveXCommand}">
+                                Move
+                            </Button>
+                        </Grid>
+                    </Grid>
+                </Grid>
+
+            </GroupBox>
+            <GroupBox Grid.Column="1" Header="Altitude">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition />
+                    </Grid.RowDefinitions>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition />
+                            <ColumnDefinition />
+                            <ColumnDefinition />
+                            <ColumnDefinition />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock VerticalAlignment="Center">Speed</TextBlock>
+                        <ComboBox
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            SelectedItem="{Binding YSpeed}">
+                            <ComboBox.ItemsSource>
+                                <x:Array Type="{x:Type s:Int32}">
+                                    <s:Int32>100</s:Int32>
+                                    <s:Int32>200</s:Int32>
+                                    <s:Int32>300</s:Int32>
+                                    <s:Int32>400</s:Int32>
+                                    <s:Int32>500</s:Int32>
+                                    <s:Int32>600</s:Int32>
+                                    <s:Int32>700</s:Int32>
+                                    <s:Int32>800</s:Int32>
+                                    <s:Int32>900</s:Int32>
+                                    <s:Int32>1000</s:Int32>
+                                </x:Array>
+                            </ComboBox.ItemsSource>
+                        </ComboBox>
+                        <TextBlock
+                            Grid.Column="2"
+                            Margin="5,0,0,0"
+                            VerticalAlignment="Center">
+                            GearRatio
+                        </TextBlock>
+                        <TextBox
+                            Grid.Column="3"
+                            VerticalAlignment="Center"
+                            Text="{Binding YGearRatio}" />
+                    </Grid>
+                    <Grid Grid.Row="1" Visibility="{Binding Connected, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            FontSize="24"
+                            Text="{Binding PositionY, StringFormat=N2}" />
+                        <Grid Grid.Row="1">
+                            <Grid.RowDefinitions>
+                                <RowDefinition />
+                                <RowDefinition />
+                                <RowDefinition />
+                                <RowDefinition />
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition />
+                                <ColumnDefinition />
+                            </Grid.ColumnDefinitions>
+                            <Button
+                                Height="25"
+                                Margin="0,0,2.5,0"
+                                Command="{Binding NudgeYCommand}"
+                                CommandParameter="{StaticResource NegativeDotOne}">
+                                -0.1
+                            </Button>
+                            <Button
+                                Grid.Column="1"
+                                Height="25"
+                                Margin="2.5,0,0,0"
+                                Command="{Binding NudgeYCommand}"
+                                CommandParameter="{StaticResource DotOne}">
+                                +0.1
+                            </Button>
+                            <Button
+                                Grid.Row="1"
+                                Height="25"
+                                Margin="0,5,2.5,0"
+                                Command="{Binding NudgeYCommand}"
+                                CommandParameter="{StaticResource NegativeOne}">
+                                -1
+                            </Button>
+                            <Button
+                                Grid.Row="1"
+                                Grid.Column="1"
+                                Height="25"
+                                Margin="2.5,5,0,0"
+                                Command="{Binding NudgeYCommand}"
+                                CommandParameter="{StaticResource One}">
+                                +1
+                            </Button>
+                            <Button
+                                Grid.Row="2"
+                                Height="25"
+                                Margin="0,5,2.5,0"
+                                Command="{Binding NudgeYCommand}"
+                                CommandParameter="{StaticResource NegativeTen}">
+                                -10
+                            </Button>
+                            <Button
+                                Grid.Row="2"
+                                Grid.Column="1"
+                                Height="25"
+                                Margin="2.5,5,0,0"
+                                Command="{Binding NudgeYCommand}"
+                                CommandParameter="{StaticResource Ten}">
+                                +10
+                            </Button>
+
+                            <TextBox
+                                Grid.Row="3"
+                                Margin="0,5,2.5,0"
+                                VerticalAlignment="Center"
+                                HorizontalContentAlignment="Right"
+                                Text="{Binding TargetPositionY}" />
+                            <Button
+                                Grid.Row="3"
+                                Grid.Column="1"
+                                Height="25"
+                                Margin="2.5,5,0,0"
+                                Command="{Binding MoveYCommand}">
+                                Move
+                            </Button>
+                        </Grid>
+                    </Grid>
+                </Grid>
+            </GroupBox>
+        </Grid>
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type oapa:UniversalPolarAlignmentOAPAVM}">
+        <oapa:OAPAControlPanel />
+    </DataTemplate>
+</ResourceDictionary>
