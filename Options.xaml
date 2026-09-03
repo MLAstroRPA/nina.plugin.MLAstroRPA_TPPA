@@ -496,12 +496,7 @@
                         IsChecked="{Binding ActiveSystem.DoAutomatedAdjustments}"
                         Visibility="{Binding IsSystemSelected, Converter={StaticResource BooleanToVisibilityConverter}}" />
                     <Grid Visibility="{Binding IsSystemSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
-                        <TextBlock
-                            Margin="5,5,0,0"
-                            VerticalAlignment="Center"
-                            FontStyle="Italic"
-                            Text="This option is under test and experimental"
-                            Visibility="{Binding ActiveSystem.DoAutomatedAdjustments, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        
                     </Grid>
                 </StackPanel>
                 <Grid Grid.Row="25" Visibility="{Binding IsSystemSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
