@@ -1,3 +1,7 @@
 <Solution>
+  <Folder Name="/tools/">
+    <Project Path="tools/mlastro-iconbuild/mlastro-iconbuild.csproj" />
+  </Folder>
+  <Project Path="../../../../../../../AppData/Local/Temp/mlastro_iconbuild/mlastro_iconbuild.csproj" />
   <Project Path="MLAstroRPA_TPPA.csproj" />
 </Solution>

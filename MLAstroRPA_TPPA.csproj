@@ -46,6 +46,12 @@ sequencer instruction and polar alignment assistant.</Description>
          Nullable disabled (TPPA base) - annotations are harmless, suppress the warning. -->
     <NoWarn>$(NoWarn);CS0618;NU1701;MSB3277;CS8632</NoWarn>
 
+    <!-- Keep the standalone tools\mlastro-iconbuild project (its own obj/bin + generated
+         AssemblyInfo.cs) out of THIS plugin's default item globs. Otherwise building the plugin
+         would compile tools\**\*.cs into the plugin (and its WPF _wpftmp project), producing
+         CS0579 duplicate attribute errors. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);tools\**</DefaultItemExcludes>
+
     <!-- Single-DLL plugin output -->
     <RunPostBuildEvent>OnOutputUpdated</RunPostBuildEvent>
     <DisableFastUpToDateCheck>true</DisableFastUpToDateCheck>

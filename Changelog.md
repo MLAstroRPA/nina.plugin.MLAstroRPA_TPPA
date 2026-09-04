@@ -1,79 +1,57 @@
 ﻿# Changelog
 
-## 2.3.0.0 (2026-09-03) — Merged MLAstroRPA + TPPA (nina.plugin.MLAstroRPA_TPPA)
+> **Origin & license (TPPA).** The polar-alignment portion of this plugin is a fork of the
+> original open-source **Three Point Polar Alignment (TPPA)** plugin for NINA by
+> [Isbeorn](https://github.com/isbeorn/nina.plugin.polaralignment), which is licensed under the
+> **Mozilla Public License 2.0 (MPL-2.0)**. The TPPA-derived code in this project therefore stays
+> under MPL-2.0, keeping the original license/copyright notices. **MLAstroRPA+TPPA is a separate,
+> unofficial build — it is NOT the original/official TPPA plugin.** When redistributing, comply
+> with MPL-2.0: retain the license and notices, credit the original author, and make the source
+> (including your modifications) available.
 
-This repository is the **single merged plugin** combining the standalone MLAstro Robotic Polar
-Alignment plugin with this TPPA fork. Plugin display name: **MLAstroRPA+TPPA**
-(assembly `NINA.Plugins.PolarAlignment`, GUID `1352D162-2E66-4F80-A05B-854F021DB913` — a UNIQUE
-GUID, distinct from standalone TPPA `1de8d7d3-...`, so NINA sees them as two different plugins).
+## 2.3.0.0 — Merged MLAstroRPA into TPPA (nina.plugin.MLAstroRPA_TPPA)
 
-- Single options page with top-level tabs: **TPPA OPTION**, **CONTROL**, **CONNECTION**,
-  **CONFIGURATION**.
-- Single `IPluginManifest` (`PolarAlignmentPlugin`); the MLAstro options/state controller is
-  `MLAstroRPA-navigation\Plugin\MLAstroController.cs`, owned by the manifest.
-- Removed the cross-plugin reflection bridge: `MLAstroRPA\MLAstroLink.cs` now calls
-  `SerialConnectionService` directly (same assembly) while keeping the shared COM-port
-  "external control" borrow + pause-query architecture and the direct COM-scan fallback.
-- Removed the obsolete "This plugin conflicts with the TPPA plugin" warning banner in CONNECTION.
-- Version bumped to `2.3.0.0`. All TPPA-origin notes below still describe the TPPA portion.
+Single options page with top-level tabs — **TPPA OPTION**, **CONTROL**, **CONNECTION**,
+**CONFIGURATION** — and a single `IPluginManifest` (`PolarAlignmentPlugin`); the MLAstro
+options/state controller (`MLAstroRPA-navigation\Plugin\MLAstroController.cs`) is owned by the
+manifest.
+
+### MLAstroRPA — main features (CONTROL / CONNECTION / CONFIGURATION)
+- **CONTROL** — manual jog/move and home, live position & polar-alignment error readout, alarm
+  history, FORCE STOP / RESET ERROR.
+- **CONNECTION** — COM port + baud selection, connect/disconnect, ESP32 reset, and a live serial
+  terminal (Hex checkbox before Send sends up to 16 hex characters as raw bytes; HandShake sends
+  `[MLAstroRPA-TC]` and shows `Handshake: OK!` on `OK!` / `Handshake: NO ANSWER` otherwise).
+- **CONFIGURATION** — soft limits, TMC2209 motor drivers (AZ/ALT), backlash & P.A. overshoot,
+  WiFi (AP + Station), save-all & reboot.
+
+
+### Added to TPPA
+- New **MLAstroRPA** polar alignment system alongside None / UPAS / OAPA. When selected, the TPPA
+  routine drives the MLAstro RPA hardware automatically over serial (USB/WiFi bridge): handshake
+  on connect, corrections translated to the device's DMS format, structured align command + `ok`
+  acknowledgement, and a polling loop that completes when the device reports `READY` /
+  `ALIGN_COMPLETED`. `Abort` sends `STOP:1` and cancels the in-progress move.
+- **Alt-axis overshoot** for automated corrections — master **"Enable overshoot"** with
+  per-direction (**"Run overshoot for moving Up"** / **"Run overshoot for moving Down"**) toggles
+  and a 0–240 arcminute overshoot amount. With overshoot, the Alt axis corrects 100% of the error
+  then travels the overshoot past the target; without overshoot it corrects only the configured
+  safety factor (same as Azimuth).
+- Configurable **"Correction Safety Factor"** (default 75%, range 1–100%) applied to Azimuth on
+  every automated correction and to Altitude when overshoot is not active for the current
+  direction.
+- **Axis reversal** for the MLAstroRPA system — **"Reverse Azimuth/Altitude Axis?"** toggles
+  (default ON, persisted per axis) plus **"Enable auto-reverse"** (default OFF) which probes the
+  correct direction with a small first nudge (**"Detecting direction"**, default 50%) before
+  committing the full move. The direction follows the solved on-screen error, not the motor
+  command.
+- Removed the **"Log polling data"** option (serial TX/RX logging); only connection lifecycle is
+  logged.
+- Under the hood, the shared polar-alignment driver/VM base gained virtual hooks (movement,
+  status polling, port handshake, abort) so the MLAstroRPA driver reuses the standard connect /
+  status flow without code duplication.
 
 ---
-
-## Unreleased (MLAstroRPA-BaseOn-16b785e branch)
-
-### Versioning
-
-This MLAstroRPA edition is a fork of the upstream Three Point Polar Alignment (TPPA) plugin, branched from commit `16b785e` of the TPPA `master` branch. At that commit, the upstream TPPA plugin had version number `2.2.5.0`.
-
-- The plugin version follows the upstream TPPA scheme and stays at `2.2.5.0` (the version of the upstream commit this fork is based on).
-- The fork identity is exposed through the plugin metadata: `Repository` and `ChangelogURL` point to the MLAstroRPA fork, and the plugin description states that this is a fork of TPPA (with a **Fork page** link).
-
-### MLAstroRPA Alt-axis overshoot
-- Added a master **"Enable overshoot"** option for the MLAstroRPA system, plus **"Run overshoot for moving Up"** / **"Run overshoot for moving Down"** checkboxes, each with its own arcminute field.
-- When enabled for the on-screen correction direction, the Alt axis corrects the full 100% of the error and then moves a fixed overshoot amount past the target, configurable from 0–240 arcminutes (0 = correct the full error with no overshoot).
-- When overshoot is **not** active for the current correction direction (master **"Enable overshoot"** off, or the direction's **"Run overshoot"** checkbox off), the Alt axis corrects only **75%** of the error (same factor as the Azimuth axis) instead of the full 100%.
-- The 75% safety factor used for corrections without overshoot is now configurable as **"Correction Safety Factor"** (default 75%, range 1–100%, stored in `MLAstroRPACorrectionFactorPercent`). It applies to the Azimuth axis on every automated correction and to the Altitude axis when overshoot is not used for the current direction.
-- The direction used for overshoot selection follows the direction reported on screen by the solve (`CurrentMountAxisAltitudeErrorDirection`), not the motor command direction (which may be flipped by the automated direction correction).
-
-### MLAstroRPA axis direction reversal
-- The **"Reverse Azimuth Axis?"** / **"Reverse Altitude Axis?"** toggles now work for the MLAstroRPA system. They are persisted per axis (`MLAstroRPAReverseAzimuth` / `MLAstroRPAReverseAltitude`) and invert the sign of the corresponding nudge/move command in the same way as the UPAS / OAPA systems. Their defaults are now **ON**.
-- Added an **"Enable auto-reverse"** toggle (default OFF) above the two Reverse toggles. When it is ON, the automated correction loop may auto-reverse an axis when it detects the error getting worse, and the two manual Reverse toggles are disabled. When it is OFF (default), the direction is controlled solely by the two Reverse toggles.
-- While auto-reverse is ON, the very first nudge only moves a configurable percentage of the full correction (**"Detecting direction"**, default 50%, range 1–100%) so the plugin can safely probe the correct direction before committing the full move.
-
-### Removed
-- Removed the **"Log polling data"** checkbox and the serial data logging feature (`LoggingSerialPort` no longer logs TX/RX data lines; only connection lifecycle is logged).
-
-### MLAstroRPA system integration
-- Added `MLAstroRPA` as a new polar alignment system option alongside None / UPAS / OAPA in the plugin settings ComboBox.
-- Added `UniversalPolarAlignmentMLAstroRPA` — a dedicated driver for the MLAstro Robotic Polar Alignment hardware communicating over serial (USB/WiFi bridge).
-- Added `UniversalPolarAlignmentMLAstroRPAVM` — the ViewModel layer for the MLAstroRPA system, wired into the options panel with Connect / Disconnect controls and a live status text field.
-- Added an `MLAstroRPA` GroupBox in the options panel, visible only when MLAstroRPA is the selected system.
-- Added protocol documentation at `PolarAlignment/MLAstroRPA/protocol.md` describing the serial command set.
-
-### MLAstroRPA driver details (`UniversalPolarAlignmentMLAstroRPA`)
-- Performs a handshake on connect by sending `[MLAstroRPA-TC]` and verifying the device replies `ok` before accepting the port.
-- Clears the serial input buffer after opening the port to avoid stale data.
-- Translates TPPA arc-minute correction values into the device's DMS (degrees / minutes / seconds / direction) format before sending.
-- Sends a structured align command (`AzED/AzEM/AzES/AzDi/AlED/AlEM/AlES/AlDi/AAll`) and waits for an `ok` acknowledgement.
-- After sending the align command, starts an internal polling loop that queries `?` every 300 ms and parses the status response to detect `READY` or `ALIGN_COMPLETED`, then signals completion automatically.
-- Supports `Abort` by sending `STOP:1` and immediately cancelling any in-progress alignment `TaskCompletionSource`.
-- Overrides `MoveAbsolute` to calculate the delta from the current position and delegate to `MoveRelative`.
-- Parses device telemetry with a dedicated regex matching the `<STATUS|Mpos:x,y|>` frame format.
-- Overrides `UpdateStatus` to use `StatusQueryCommand` (`?`) and `ReadStatusResponse`.
-
-### UniversalPolarAlignmentBase extensibility changes
-- Made `MoveRelative`, `MoveAbsolute`, `UpdateStatus`, and `Abort` **virtual** so subclasses can override the full movement and status-polling behaviour.
-- Added virtual hook `OnPortOpened(SerialPort)` called immediately after the port is opened, allowing subclasses to perform a protocol handshake before the first status query.
-- Added virtual `IsStatusResponseValid(string)` so subclasses can define their own validation logic during port scanning.
-- Added virtual `ReadStatusResponse(SerialPort)` with a configurable `StatusResponseLineCount` property.
-- Added virtual `StatusQueryCommand` property (default `"?"`) so subclasses can change the polling command without reimplementing `UpdateStatus`.
-- Extracted `TryApplyStatusLine(string)` as a protected helper that runs the regex, updates `Status` / `XPosition` / `YPosition` / `ZPosition`, and returns a bool — reusable by any override.
-- Changed `Status`, `XLastDirection`, `YLastDirection`, `ZLastDirection`, `XPosition`, `YPosition`, `ZPosition`, and `semaphore` from `private` to `protected` so subclasses have direct access when needed.
-- Added a no-op virtual `Abort(CancellationToken)` implementation to satisfy the `IPolarAlignmentSystem` interface; subclasses override it to send a hardware stop command.
-
-### UniversalPolarAlignmentBaseVM extensibility changes
-- Added virtual `TestConnectStatus` string property and `TestConnectCommand` relay command so subclasses (e.g. MLAstroRPA) can expose a lightweight connection test with a status message without reimplementing the full connect flow.
-- Added `Abort` relay command in the base VM that calls `upa.Abort(token)`, wired to both the UI and the automated adjustment flow.
 
 ## Version 2.2.5.0
 - Replaced AAPA/Avalon checkboxes with a single ComboBox selector (None / UPAS / AAPA) per code review feedback
