@@ -164,6 +164,9 @@ namespace NINA.Plugins.PolarAlignment.Dockables {
                 // Việc clear sẽ được thực hiện ở đầu mỗi lần chạy mới trong Instructions.PolarAlignment.Execute()
                 // (dispose TPAPAVM cũ + tạo TPAPAVM mới). Tạm thời vô hiệu hoá dòng tạo TPAPAVM mới ở đây,
                 //(PolarAlignment as Instructions.PolarAlignment).TPAPAVM = new TPAPAVM(profileService, weatherDataMediator);
+                // Ẩn dòng step "Adjust Altitude / Azimuth" đang quay ngay khi kết thúc
+                // (vẫn giữ nguyên kết quả error lần chụp cuối cùng trên panel).
+                (PolarAlignment as Instructions.PolarAlignment).TPAPAVM?.FinishAlignment();
             }
             return false;
         }
