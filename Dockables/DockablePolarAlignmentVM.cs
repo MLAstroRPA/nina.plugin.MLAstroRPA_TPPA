@@ -160,7 +160,10 @@ namespace NINA.Plugins.PolarAlignment.Dockables {
                 OptionsExpanded = true;
                 cameraMediator.ReleaseCaptureBlock(this);
                 externalProgress?.Report(GetStatus(string.Empty));
-                (PolarAlignment as Instructions.PolarAlignment).TPAPAVM = new TPAPAVM(profileService, weatherDataMediator);
+                // Giữ nguyên TPAPAVM sau khi finish để panel hiện kết quả error lần chụp cuối cùng.
+                // Việc clear sẽ được thực hiện ở đầu mỗi lần chạy mới trong Instructions.PolarAlignment.Execute()
+                // (dispose TPAPAVM cũ + tạo TPAPAVM mới). Tạm thời vô hiệu hoá dòng tạo TPAPAVM mới ở đây,
+                //(PolarAlignment as Instructions.PolarAlignment).TPAPAVM = new TPAPAVM(profileService, weatherDataMediator);
             }
             return false;
         }
