@@ -34,10 +34,10 @@
 hardware control (CONTROL / CONNECTION / CONFIGURATION) with the Three Point Polar Alignment wizard,
 sequencer instruction and polar alignment assistant.</Description>
     <Copyright>Copyright © 2021-2026</Copyright>
-    <Version>2.3.0.0</Version>
-    <AssemblyVersion>2.3.0.0</AssemblyVersion>
-    <FileVersion>2.3.0.0</FileVersion>
-    <InformationalVersion>2.3.0.0</InformationalVersion>
+    <Version>2.0.0.7</Version>
+    <AssemblyVersion>2.0.0.7</AssemblyVersion>
+    <FileVersion>2.0.0.7</FileVersion>
+    <InformationalVersion>2.0.0.7</InformationalVersion>
 
     <!-- CS0618: NINA exposes obsolete RelayCommand/AsyncCommand contracts that the plugin uses
          deliberately. NU1701: older packages (ToastNotifications/FreeImage) restored for net8.0.
@@ -101,4 +101,17 @@ sequencer instruction and polar alignment assistant.</Description>
     <!-- Only the plugin DLL is deployed. NINA shows the logo via
          AssemblyMetadata("FeaturedImageURL") and the in-UI logos are embedded resources. -->
   </Target>
+
+  <!-- Keep the MSI/GitHub-release staging copy of the plugin DLL fresh on every Release build.
+       Building the installer (MLAstroRPA_TPPA.Installer.wixproj) triggers this via the
+       ProjectReference, and Package.wxs harvests the DLL from Installer\MSI\Plugin\MLAstroRPA_TPPA. -->
+  <Target Name="RefreshInstallerPluginDll" AfterTargets="PostBuildEvent" Condition="'$(Configuration)' == 'Release'">
+    <PropertyGroup>
+      <StagedPluginDir>$(ProjectDir)Installer\MSI\Plugin\MLAstroRPA_TPPA</StagedPluginDir>
+    </PropertyGroup>
+    <MakeDir Directories="$(StagedPluginDir)" Condition="!Exists('$(StagedPluginDir)')" />
+    <Copy SourceFiles="$(TargetDir)NINA.Plugins.MLAstroRPA_TPPA.dll" DestinationFolder="$(StagedPluginDir)" />
+    <Message Importance="High" Text="[MLAstroRPA+TPPA] Plugin DLL copied to MSI staging: $(StagedPluginDir)" />
+  </Target>
+
 </Project>

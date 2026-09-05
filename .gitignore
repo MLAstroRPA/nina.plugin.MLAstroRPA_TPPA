@@ -17,3 +17,9 @@ obj/
 *.tmp
 *.TMP
 *~
+
+ 
+Installer/MSI/bin/
+Installer/MSI/obj/  
+Installer/MSI/Plugin/
+Installer/MSI/Output/

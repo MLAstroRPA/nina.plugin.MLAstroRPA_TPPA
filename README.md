@@ -63,7 +63,21 @@ dotnet build MLAstroRPA_TPPA.slnx -c Release -tl:off
 ## INSTALL (end users)
 
 Not a developer? Install the pre-built plugin from the
-[GitHub Releases](https://github.com/MLAstroRPA/nina.plugin.MLAstroRPA_TPPA/releases) page:
+[GitHub Releases](https://github.com/MLAstroRPA/nina.plugin.MLAstroRPA_TPPA/releases) page.
+Two options are available: the **MSI installer** (recommended) or a **manual DLL copy**.
+
+### Option 1 - MSI installer (recommended)
+
+1. **Close N.I.N.A** completely.
+2. Download the latest `MLAstroRPA_TPPA_Plugin_<version>.msi` from the release.
+3. Run the `.msi` and follow the setup wizard:
+   - The installer checks that N.I.N.A. is installed and prompts you to close it if it is running.
+   - It installs the plugin into `%LOCALAPPDATA%\NINA\Plugins\3.0.0\MLAstroRPA-TPPA\`.
+4. Restart N.I.N.A.
+5. To uninstall, use **Windows Settings → Apps** (or *Programs and Features*) and remove
+   **MLAstroRPA+TPPA**.
+
+### Option 2 - Manual DLL copy (advanced)
 
 1. **Close N.I.N.A** completely.
 2. Download the latest `NINA.Plugins.MLAstroRPA_TPPA.dll` from the release.
@@ -73,10 +87,6 @@ Not a developer? Install the pre-built plugin from the
 4. Create a folder named `MLAstroRPA-TPPA` inside it.
 5. Copy the downloaded `.dll` into that folder.
 6. Restart N.I.N.A.
-
-> **Before upgrading / installing:** make sure any old separate installations of
-> `MLAstro Robotic Polar Alignment` and `Three Point Polar Alignment` are removed (see note
-> above) so they do not conflict with the merged plugin.
 
 ### Verify installation
 
