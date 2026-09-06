@@ -47,6 +47,16 @@ namespace NINA.Plugins.PolarAlignment {
             catch (Exception ex) { Logger.Error($"[MLAstroLink] Connect failed: {ex.Message}"); return Task.FromResult(false); }
         }
 
+        /// <summary>
+        /// Mở cổng CHỦ (MLAstro) trên đúng cổng vừa dò được, LUÔN ở 115200 (firmware MLAstroRPA cố định)
+        /// → MLAstro thành Connected &amp; monitor được; TPPA chỉ mượn lại sau đó (BeginExternalControl).
+        /// </summary>
+        public Task<bool> ConnectOnPortAsync(string portName) {
+            if (service == null || string.IsNullOrWhiteSpace(portName)) return Task.FromResult(false);
+            try { return service.ConnectAsync(portName, 115200); }
+            catch (Exception ex) { Logger.Error($"[MLAstroLink] ConnectOnPort failed: {ex.Message}"); return Task.FromResult(false); }
+        }
+
         public void Disconnect() {
             try { service?.Disconnect(); }
             catch (Exception ex) { Logger.Error($"[MLAstroLink] Disconnect failed: {ex.Message}"); }

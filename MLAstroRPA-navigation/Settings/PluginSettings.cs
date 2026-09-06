@@ -83,10 +83,14 @@ namespace MLAstro_Robotic_Polar_Alignment.Settings
             set => SetString(value);
         }
 
+        /// <summary>
+        /// Baudrate cứng của firmware MLAstroRPA (115200 8N1). Không còn cho cấu hình:
+        /// luôn trả 115200 bất kể giá trị đã lưu từ phiên trước (giữ setter no-op để tương thích binding cũ).
+        /// </summary>
         public int BaudRate
         {
-            get => GetInt(nameof(BaudRate), 9600);
-            set => SetInt(value);
+            get => 115200;
+            set { }
         }
 
         public int HandshakeTimeoutMilliseconds

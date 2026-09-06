@@ -12,10 +12,11 @@ namespace NINA.Plugins.PolarAlignment.MLAstroRPA {
         private TaskCompletionSource<string> alignmentCompletionSource;
 
         /// <summary>
-        /// Ưu tiên dùng CHUNG cổng COM với plugin MLAstro (MLAstro là CHỦ cổng, cùng process NINA)
-        /// — nhưng CHỈ KHI MLAstro ĐANG KẾT NỐI (IsConnected). Nếu MLAstro chưa kết nối (chưa nạp /
-        /// chưa mở cổng) thì TPPA TỰ quét COM &amp; mở cổng riêng (auto-detect) để không ép MLAstro
-        /// auto-open theo cổng đã cấu hình khi người dùng chưa kết nối MLAstro.
+        /// LUÔN kết nối QUA plugin MLAstro làm CHỦ cổng duy nhất (cùng process NINA):
+        ///  - MLAstro đang kết nối → mượn ngay (shared);
+        ///  - chưa kết nối → auto-detect tìm cổng thiết bị rồi MỞ CHỦ qua MLAstro (115200) để MLAstro
+        ///    thành Connected &amp; monitor, sau đó mượn. Nhờ vậy MLAstro luôn giữ quyền, không có cổng COM
+        ///    riêng thứ hai (private). Chỉ khi không có MLAstro service (build standalone) mới tự mở cổng.
         /// </summary>
         public UniversalPolarAlignmentMLAstroRPA() : base(deferOpen: true) {
             if (!TryOpenPreferred()) {
@@ -24,34 +25,78 @@ namespace NINA.Plugins.PolarAlignment.MLAstroRPA {
         }
 
         private bool TryOpenPreferred() {
-            try {
-                var link = MLAstroLink.TryCreate();
-                // Chỉ "mượn" cổng của MLAstro khi MLAstro ĐANG kết nối (link.IsConnected).
-                // Nếu MLAstro chưa kết nối -> KHÔNG ép mở cổng qua MLAstro; rơi xuống quét COM
-                // trực tiếp (auto-detect) bên dưới — khớp hành vi Test Connect.
-                if (link != null && link.IsConnected && !string.IsNullOrWhiteSpace(link.ConfiguredComPort)) {
-                    var shared = new SharedMlastroSerial(link);
-                    shared.StopRequested += OnExternalStop;   // MLAstro bấm STOP/E-STOP -> dừng PA
-                    shared.Open();   // ném exception nếu không mở được -> rơi xuống catch -> fallback
-                    AttachPort(shared);
-                    UpdateStatus();
-                    if (Connected && !string.IsNullOrWhiteSpace(Status)) {
-                        Logger.Info($"[MLAstroRPA] Connected through MLAstro plugin on {link.ConfiguredComPort}");
-                        return true;
-                    }
-                    Logger.Info("[MLAstroRPA] MLAstro shared session not usable; falling back to direct scan.");
-                    try { shared.Close(); } catch { }
-                } else if (link != null) {
-                    // MLAstro plugin có mặt nhưng CHƯA kết nối -> TPPA tự quét COM trực tiếp.
-                    Logger.Info("[MLAstroRPA] MLAstro plugin present but not connected - using direct COM scan.");
-                }
-            } catch (Exception ex) {
-                Logger.Error($"[MLAstroRPA] Shared connect via MLAstro failed ({ex.Message}); falling back to direct scan.");
+            MLAstroLink link;
+            try { link = MLAstroLink.TryCreate(); } catch { link = null; }
+
+            // Không có MLAstro service (build standalone): fallback cũ - TPPA tự quét & mở cổng riêng.
+            if (link == null) {
+                port = null;
+                OpenAndValidate();
+                return port != null;
             }
-            // Fallback: không có MLAstro plugin -> TPPA tự mở cổng như cũ.
+
+            // LUÔN đi qua MLAstro làm CHỦ cổng duy nhất (giống nhánh "tận dụng"):
+            //  - MLAstro đang kết nối → dùng cổng đang mở (mượn ngay);
+            //  - chưa kết nối → auto-detect tìm cổng thiết bị, rồi MỞ CHỦ qua MLAstro (115200) để
+            //    MLAstro thành Connected & monitor được; TPPA chỉ mượn lại (BeginExternalControl).
+            var portName = link.IsConnected ? link.ConfiguredComPort : ScanForDeviceComPort();
+            if (!string.IsNullOrWhiteSpace(portName)) {
+                try {
+                    if (!link.IsConnected && !link.ConnectOnPortAsync(portName).GetAwaiter().GetResult()) {
+                        Logger.Error($"[MLAstroRPA] Could not open owner (MLAstro) on {portName}.");
+                    }
+                    if (link.IsConnected) {
+                        var shared = new SharedMlastroSerial(link);
+                        shared.StopRequested += OnExternalStop;   // MLAstro bấm STOP/E-STOP -> dừng PA
+                        shared.Open();   // ném exception nếu không giữ được quyền -> rơi xuống fallback
+                        AttachPort(shared);
+                        UpdateStatus();
+                        if (Connected && !string.IsNullOrWhiteSpace(Status)) {
+                            Logger.Info($"[MLAstroRPA] Connected via MLAstro (owner) on {portName}");
+                            return true;
+                        }
+                        Logger.Info("[MLAstroRPA] MLAstro shared session not usable; falling back to direct scan.");
+                        try { shared.Close(); } catch { }
+                    }
+                } catch (Exception ex) {
+                    Logger.Error($"[MLAstroRPA] Connect via MLAstro owner failed ({ex.Message}); falling back to direct scan.");
+                }
+            } else {
+                Logger.Info("[MLAstroRPA] MLAstro not connected and no device found by auto-detect; falling back to direct scan.");
+            }
+
+            // Last resort (thực tế không xảy ra trong plugin merged): tự quét & mở cổng riêng.
             port = null;   // để OpenAndValidate() báo lỗi đúng nếu không tìm thấy thiết bị
             OpenAndValidate();
             return port != null;
+        }
+
+        /// <summary>
+        /// Dò cổng COM đang gắn thiết bị MLAstroRPA bằng bắt tay nhanh ([MLAstroRPA-TC] → "ok,...").
+        /// Mở/đóng từng cổng tạm thời và KHÔNG giữ handle — kết quả chỉ là tên cổng để TPPA nhờ
+        /// MLAstro (chủ) mở sau đó (tránh 2 handle trên cùng 1 COM).
+        /// </summary>
+        private string ScanForDeviceComPort() {
+            foreach (var comPort in SerialPort.GetPortNames()) {
+                using var probe = new LoggingSerialPort(comPort, 115200, Parity.None, 8, StopBits.One) {
+                    NewLine = NewLineSequence,
+                    ReadTimeout = ScanReadTimeout,
+                    WriteTimeout = ScanWriteTimeout
+                };
+                try {
+                    probe.Open();
+                    probe.DiscardInBuffer();
+                    probe.WriteLine("[MLAstroRPA-TC]");
+                    var ack = probe.ReadLine()?.Trim();
+                    if (string.Equals(ack?.Split(',')[0], "ok", StringComparison.OrdinalIgnoreCase)) {
+                        Logger.Info($"[MLAstroRPA] Auto-detect found device on {comPort}: {ack}");
+                        return comPort;
+                    }
+                } catch {
+                    // Cổng không phải thiết bị / đang bận → bỏ qua (using sẽ đóng & dispose).
+                }
+            }
+            return null;
         }
 
         /// <summary>MLAstro báo STOP/E-STOP (hoặc ngắt) giữa chừng -> hủy PA đang chạy ngay.</summary>

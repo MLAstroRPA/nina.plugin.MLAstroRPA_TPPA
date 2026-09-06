@@ -26,10 +26,12 @@ namespace MLAstro_Robotic_Polar_Alignment.Plugin
     /// </summary>
     public class MLAstroController : INotifyPropertyChanged, IDisposable
     {
-        private static readonly int[] DefaultBaudRates = { 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600 };
+        // Firmware MLAstroRPA chạy cố định 115200 8N1 - không cho người dùng chọn baudrate nữa.
+        private const int SerialBaudRate = 115200;
 
         private readonly SerialConnectionService _serialConnectionService;
         private readonly PolarAlignmentDockVM _polarAlignmentDockVM;
+        private readonly Action<bool> _onPauseQueryChanged;
         private ResourceDictionary? _pluginResourceDictionary;
         private FileSystemWatcher? _pluginFolderWatcher;
         private bool _disposed = false;
@@ -82,8 +84,6 @@ namespace MLAstro_Robotic_Polar_Alignment.Plugin
                 return infos.Concat(new[] { new ComPortInfo(Settings.ComPort, string.Empty) }).ToArray();
             }
         }
-
-        public int[] AvailableBaudRates => DefaultBaudRates;
 
         public string SerialConnectionStatus => _serialConnectionService.ConnectionStatus;
 
@@ -333,7 +333,11 @@ namespace MLAstro_Robotic_Polar_Alignment.Plugin
             {
                 OnPropertyChanged(nameof(IsExternalLocked));
                 OnPropertyChanged(nameof(IsExternalUnlocked));
+                OnPropertyChanged(nameof(IsPauseQuery));
             });
+            // Theo dõi PauseQueryGlobal đổi (TPPA mượn/trả cổng hay gạt tay) để checkbox hiện đúng trạng thái.
+            _onPauseQueryChanged = paused => OnPropertyChanged(nameof(IsPauseQuery));
+            SerialConnectionService.PauseQueryChanged += _onPauseQueryChanged;
             RefreshComPorts();
 
             // Hook into application exit to ensure cleanup - must run on UI thread
@@ -597,7 +601,7 @@ namespace MLAstro_Robotic_Polar_Alignment.Plugin
             }
 
             RefreshComPorts();
-            await _serialConnectionService.ConnectAsync(Settings.ComPort, Settings.BaudRate);
+            await _serialConnectionService.ConnectAsync(Settings.ComPort, SerialBaudRate);
         }
 
         private void SendSerial()
@@ -759,7 +763,7 @@ namespace MLAstro_Robotic_Polar_Alignment.Plugin
                     RefreshComPorts();
 
                     AutoReconnectStatus = $"Connecting... (attempt {attempt + 1}/{maxConnectAttempts})";
-                    connected = await _serialConnectionService.ConnectAsync(Settings.ComPort, Settings.BaudRate);
+                    connected = await _serialConnectionService.ConnectAsync(Settings.ComPort, SerialBaudRate);
                     if (!connected)
                     {
                         continue;
@@ -847,7 +851,8 @@ namespace MLAstro_Robotic_Polar_Alignment.Plugin
                 && !_serialConnectionService.IsApplyingTelemetrySettings
                 && !_hasUserSettingsEdits
                 && e.PropertyName != nameof(PluginSettings.HandshakeTimeoutMilliseconds)
-                && e.PropertyName != nameof(PluginSettings.PollingIntervalMilliseconds))
+                && e.PropertyName != nameof(PluginSettings.PollingIntervalMilliseconds)
+                && e.PropertyName != nameof(PluginSettings.ComPort)) // ComPort đổi do mở kết nối (không phải user sửa config)
             {
                 _hasUserSettingsEdits = true;
                 _serialConnectionService.SuspendSettingsSync = true;
@@ -1051,6 +1056,12 @@ namespace MLAstro_Robotic_Polar_Alignment.Plugin
                 if (Settings != null)
                 {
                     Settings.PropertyChanged -= OnSettingsPropertyChanged;
+                }
+
+                // Unsubscribe from pause-query change event
+                if (_onPauseQueryChanged != null)
+                {
+                    SerialConnectionService.PauseQueryChanged -= _onPauseQueryChanged;
                 }
 
                 // Unsubscribe from serial connection service events

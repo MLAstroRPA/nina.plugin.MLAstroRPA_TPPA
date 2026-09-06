@@ -43,13 +43,20 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
 
         // Static flag to pause query on ALL instances
         private static bool _pauseQueryGlobal;
+
+        /// <summary>Xảy ra khi <see cref="PauseQueryGlobal"/> đổi (auto khi TPPA mượn/trả cổng, hoặc gạt tay)
+        /// để UI checkbox "Pause polling '?'" luôn phản ánh đúng trạng thái thật.</summary>
+        public static event Action<bool> PauseQueryChanged;
+
         public static bool PauseQueryGlobal
         {
             get => _pauseQueryGlobal;
             set
             {
+                if (_pauseQueryGlobal == value) return;
                 _pauseQueryGlobal = value;
                 Logger.Info($"[MLAstro] PauseQueryGlobal set to: {value}, total instances: {_allInstances.Count}");
+                try { PauseQueryChanged?.Invoke(value); } catch { }
             }
         }
 
@@ -242,10 +249,15 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
         {
             lock (_externalLock)
             {
-                if (!_externalControlActive) return;
-                _externalControlActive = false;
+                if (_externalControlActive)
+                {
+                    _externalControlActive = false;
+                    RaiseExternalControl(false);
+                }
             }
-            RaiseExternalControl(false);
+            // Luôn nhả cờ tạm dừng poll toàn cục, kể cả khi cờ active đã bị Disconnect() xoá từ trước.
+            // Nếu không, PauseQueryGlobal kẹt true vĩnh viễn -> MLAstro ngừng poll "?" cho tới khi có
+            // chu kỳ mượn mới hoặc gạt tay tắt pause.
             PauseQueryGlobal = false;
             Logger.Info("[MLAstro] EndExternalControl: released control to local UI (port stays open).");
         }
@@ -772,6 +784,12 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
                 AppendTerminalEntry(SerialTerminalEntry.Connected(ConnectionStatus));
                 OnPropertyChanged(nameof(IsConnected));
                 Logger.Info($"[MLAstro] Serial connected: {portName} @ {baudRate} (8-N-1)");
+                // Đồng bộ cổng đang kết nối vào cài đặt để dropdown "COM Port" trên CONNECTION tab tự
+                // chọn đúng cổng vừa mở (kể cả khi cổng do TPPA auto-detect tìm ra & mở qua chủ MLAstro).
+                _settings.ComPort = portName;
+                // Mở cổng mới thành công: nhả cờ tạm dừng poll toàn cục (phòng khi kẹt từ phiên TPPA mượn
+                // trước đó) để MLAstro poll "?" lại ngay từ đầu.
+                PauseQueryGlobal = false;
                 StartConnectionCheckTimer();
                 StartDeviceChangeWatcher();
                 _ = StartHandshakeAndConnectionChecksAsync();
@@ -858,6 +876,9 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
                     RaiseExternalStop("MLAstro disconnected");
                 }
             }
+            // MLAstro đóng cổng (có thể đang giữa phiên TPPA mượn): NHẢ cờ tạm dừng poll toàn cục để
+            // lần kết nối sau poll "?" bình thường (không bị kẹt bởi phiên mượn trước).
+            PauseQueryGlobal = false;
 
             if (_serialPort == null)
             {

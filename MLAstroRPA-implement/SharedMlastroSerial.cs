@@ -84,12 +84,23 @@ namespace NINA.Plugins.PolarAlignment {
             disconnectNotified = false;
             var ok = link.BeginExternalControl().GetAwaiter().GetResult();
             if (!ok || !link.IsConnected) {
+                // Không giữ được quyền điều khiển: nhả mọi cờ để MLAstro không bị khoá UI / dừng poll.
+                try { link.EndExternalControl(); } catch { }
                 throw new Exception("Unable to open serial through MLAstro plugin.");
             }
-            link.Subscribe(onLine, onState);
-            link.SubscribeStop(onStop);
-            open = true;
-            Logger.Info("[MLAstroRPA] Shared serial session opened via MLAstro plugin (external control active).");
+            try {
+                link.Subscribe(onLine, onState);
+                link.SubscribeStop(onStop);
+                open = true;
+                Logger.Info("[MLAstroRPA] Shared serial session opened via MLAstro plugin (external control active).");
+            } catch {
+                // Đăng ký listener lỗi giữa chừng -> trả quyền ngay để không kẹt MLAstro
+                // (khoá UI + PauseQueryGlobal) khi phiên chia sẻ không dùng được.
+                try { link.Unsubscribe(onLine, onState); } catch { }
+                try { link.UnsubscribeStop(onStop); } catch { }
+                try { link.EndExternalControl(); } catch { }
+                throw;
+            }
         }
 
         /// <summary>Kết thúc phiên: ngừng nhận, cho MLAstro poll lại và ĐÓNG cổng chung cho cả 2 phía.</summary>

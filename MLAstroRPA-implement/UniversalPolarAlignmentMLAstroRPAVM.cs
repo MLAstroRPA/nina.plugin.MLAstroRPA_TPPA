@@ -169,13 +169,14 @@ namespace NINA.Plugins.PolarAlignment.MLAstroRPA
             if (link != null && link.IsConnected && !string.IsNullOrWhiteSpace(link.ConfiguredComPort))
             {
                 TestConnectStatus = $"Checking {link.ConfiguredComPort} via MLAstro plugin...";
+                var shared = new SharedMlastroSerial(link);
+                var sharedOpened = false;
                 try
                 {
-                    var shared = new SharedMlastroSerial(link);
                     shared.Open(); // BeginExternalControl - cổng MLAstro đã mở nên tức thì
+                    sharedOpened = true;
                     shared.WriteLine("?");
                     var status = await ReadStatusViaSharedAsync(shared);
-                    shared.Close();
                     if (!string.IsNullOrWhiteSpace(status))
                     {
                         TestConnectStatus = $"MLAstroRPA detected via MLAstro plugin on {link.ConfiguredComPort}. Status: {status}";
@@ -188,6 +189,12 @@ namespace NINA.Plugins.PolarAlignment.MLAstroRPA
                 catch (Exception ex)
                 {
                     Logger.Error($"[MLAstroRPA-TestConnect] Shared test via MLAstro failed: {ex.Message}");
+                }
+                finally
+                {
+                    // LUÔN trả quyền điều khiển cho MLAstro (kể cả khi lỗi giữa chừng) để không kẹt
+                    // external-control / PauseQueryGlobal -> MLAstro vẫn poll "?" & monitor bình thường.
+                    if (sharedOpened) { try { shared.Close(); } catch { } }
                 }
                 // Không xác nhận được qua MLAstro thì thử scan trực tiếp bên dưới.
             }

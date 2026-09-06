@@ -26,11 +26,6 @@
                                           SelectedValue="{Binding Settings.ComPort, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                           DropDownOpened="OnComPortDropDownOpened" />
                             </StackPanel>
-                            <StackPanel Width="220" Margin="0,0,10,10">
-                                <TextBlock Text="Baud Rate" Margin="0,0,0,5" />
-                                <ComboBox ItemsSource="{Binding AvailableBaudRates}"
-                                          SelectedItem="{Binding Settings.BaudRate, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                            </StackPanel>
                         </WrapPanel>
 
                         <WrapPanel Margin="0,0,0,10">
