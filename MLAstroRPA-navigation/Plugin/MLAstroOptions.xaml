@@ -70,7 +70,10 @@
                         </StackPanel>
 
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                            <!-- Khoá nút gạt khi TPPA đang mượn cổng (external control): lúc đó poll '?' auto-pause,
+                                 không cho user tự bật/tắt giữa phiên TPPA điều khiển. Mở lại khi TPPA trả quyền. -->
                             <CheckBox IsChecked="{Binding IsPauseQuery, Mode=TwoWay}"
+                                      IsEnabled="{Binding IsExternalUnlocked}"
                                       VerticalAlignment="Center"
                                       Margin="0,0,8,0" />
                             <TextBlock Text="Pause polling '?'"
