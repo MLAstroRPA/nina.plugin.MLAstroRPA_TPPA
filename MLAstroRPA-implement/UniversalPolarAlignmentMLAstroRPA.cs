@@ -12,8 +12,10 @@ namespace NINA.Plugins.PolarAlignment.MLAstroRPA {
         private TaskCompletionSource<string> alignmentCompletionSource;
 
         /// <summary>
-        /// Ưu tiên dùng CHUNG cổng COM với plugin MLAstro (MLAstro là CHỦ cổng, cùng process NINA).
-        /// Nếu MLAstro chưa cài / chưa nạp thì TPPA tự quét &amp; mở cổng riêng (fallback như trước).
+        /// Ưu tiên dùng CHUNG cổng COM với plugin MLAstro (MLAstro là CHỦ cổng, cùng process NINA)
+        /// — nhưng CHỈ KHI MLAstro ĐANG KẾT NỐI (IsConnected). Nếu MLAstro chưa kết nối (chưa nạp /
+        /// chưa mở cổng) thì TPPA TỰ quét COM &amp; mở cổng riêng (auto-detect) để không ép MLAstro
+        /// auto-open theo cổng đã cấu hình khi người dùng chưa kết nối MLAstro.
         /// </summary>
         public UniversalPolarAlignmentMLAstroRPA() : base(deferOpen: true) {
             if (!TryOpenPreferred()) {
@@ -24,7 +26,10 @@ namespace NINA.Plugins.PolarAlignment.MLAstroRPA {
         private bool TryOpenPreferred() {
             try {
                 var link = MLAstroLink.TryCreate();
-                if (link != null && !string.IsNullOrWhiteSpace(link.ConfiguredComPort)) {
+                // Chỉ "mượn" cổng của MLAstro khi MLAstro ĐANG kết nối (link.IsConnected).
+                // Nếu MLAstro chưa kết nối -> KHÔNG ép mở cổng qua MLAstro; rơi xuống quét COM
+                // trực tiếp (auto-detect) bên dưới — khớp hành vi Test Connect.
+                if (link != null && link.IsConnected && !string.IsNullOrWhiteSpace(link.ConfiguredComPort)) {
                     var shared = new SharedMlastroSerial(link);
                     shared.StopRequested += OnExternalStop;   // MLAstro bấm STOP/E-STOP -> dừng PA
                     shared.Open();   // ném exception nếu không mở được -> rơi xuống catch -> fallback
@@ -36,6 +41,9 @@ namespace NINA.Plugins.PolarAlignment.MLAstroRPA {
                     }
                     Logger.Info("[MLAstroRPA] MLAstro shared session not usable; falling back to direct scan.");
                     try { shared.Close(); } catch { }
+                } else if (link != null) {
+                    // MLAstro plugin có mặt nhưng CHƯA kết nối -> TPPA tự quét COM trực tiếp.
+                    Logger.Info("[MLAstroRPA] MLAstro plugin present but not connected - using direct COM scan.");
                 }
             } catch (Exception ex) {
                 Logger.Error($"[MLAstroRPA] Shared connect via MLAstro failed ({ex.Message}); falling back to direct scan.");
