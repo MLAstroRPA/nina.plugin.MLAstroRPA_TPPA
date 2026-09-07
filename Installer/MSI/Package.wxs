@@ -11,7 +11,7 @@
 
   <!-- Define variables -->
   <?define ProductName = "MLAstroRPA+TPPA" ?>
-  <?define ProductVersion = "2.0.0.7" ?>
+  <?define ProductVersion = "2.0.0.9" ?>
   <?define Manufacturer = "MLAstro" ?>
   <?define UpgradeCode = "E6F4D2B0-1A3C-4E5F-9B7A-8C0D1E2F3A4B" ?>
   <?define PluginFolderName = "MLAstroRPA-TPPA" ?>

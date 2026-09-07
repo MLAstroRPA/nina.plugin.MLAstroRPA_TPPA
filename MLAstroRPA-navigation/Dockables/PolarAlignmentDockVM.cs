@@ -25,6 +25,7 @@ namespace MLAstro_Robotic_Polar_Alignment.Dockables
         private readonly SerialConnectionService _serialService;
         private System.Timers.Timer? _jogWatchdogTimer;
         private string? _currentJogCommand = null;
+        private readonly object _jogLock = new();
         private bool _disposed = false;
 
         // Static instance for cleanup during plugin teardown
@@ -1040,6 +1041,10 @@ namespace MLAstro_Robotic_Polar_Alignment.Dockables
 
         public void ForceStop()
         {
+            // E-STOP must also end any active jog watchdog. Otherwise a held jog keeps re-sending
+            // ":1" right after the ESTOP, the firmware re-arms the far move(+-1e9) and the motor
+            // simply restarts - which looked like "E-STOP does not stop the motor".
+            StopJogMovement();
             SendCommand("ESTOP:1\n");
             if (_serialService.IsExternalControlActive) _serialService.NotifyExternalStop("MLAstro E-STOP pressed");
         }
@@ -1054,36 +1059,56 @@ namespace MLAstro_Robotic_Polar_Alignment.Dockables
 
         private void StartJogWatchdog(string command)
         {
-            _currentJogCommand = command;
-
-            if (_jogWatchdogTimer == null)
+            lock (_jogLock)
             {
-                _jogWatchdogTimer = new System.Timers.Timer(250); // Send every 250ms
-                _jogWatchdogTimer.Elapsed += (s, e) =>
-                {
-                    if (!string.IsNullOrEmpty(_currentJogCommand) && _serialService.IsConnected)
-                    {
-                        _serialService.Send(_currentJogCommand);
-                    }
-                };
-            }
+                _currentJogCommand = command;
 
-            _jogWatchdogTimer.Start();
+                if (_jogWatchdogTimer == null)
+                {
+                    _jogWatchdogTimer = new System.Timers.Timer(250); // Send every 250ms
+                    _jogWatchdogTimer.Elapsed += (s, e) =>
+                    {
+                        string? toSend;
+                        lock (_jogLock)
+                        {
+                            // Re-check under the lock so a Stop() that already cleared the command
+                            // can never be followed by a stray ":1" from an in-flight timer tick.
+                            toSend = (!string.IsNullOrEmpty(_currentJogCommand) && _serialService.IsConnected)
+                                ? _currentJogCommand
+                                : null;
+                        }
+                        if (toSend != null)
+                        {
+                            _serialService.Send(toSend);
+                        }
+                    };
+                }
+
+                _jogWatchdogTimer.Start();
+            }
             SendCommand(command); // Send immediately first time
             Logger.Info($"[MLAstro] Started Jog watchdog: {command.TrimEnd()}");
         }
 
         private void StopJogWatchdog()
         {
-            _jogWatchdogTimer?.Stop();
-
-            if (!string.IsNullOrEmpty(_currentJogCommand))
+            string? stopCmd = null;
+            lock (_jogLock)
             {
-                // Send stop command (change :1 to :0)
-                var stopCmd = _currentJogCommand.Replace(":1", ":0");
+                _jogWatchdogTimer?.Stop();
+                if (!string.IsNullOrEmpty(_currentJogCommand))
+                {
+                    // Capture the stop command and CLEAR the active jog BEFORE sending, so a queued
+                    // watchdog tick can never deliver a stray ":1" after our ":0" / STOP / ESTOP.
+                    stopCmd = _currentJogCommand.Replace(":1", ":0");
+                    _currentJogCommand = null;
+                }
+            }
+
+            if (stopCmd != null)
+            {
                 SendCommand(stopCmd);
                 Logger.Info($"[MLAstro] Stopped Jog: {stopCmd.TrimEnd()}");
-                _currentJogCommand = null;
             }
         }
 
