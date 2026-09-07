@@ -634,5 +634,17 @@ namespace NINA.Plugins.PolarAlignment.Properties {
                 this["MLAstroRPACorrectionFactorPercent"] = value;
             }
         }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("Both")]
+        public string MLAstroRPACorrectionMode {
+            get {
+                return ((string)(this["MLAstroRPACorrectionMode"]));
+            }
+            set {
+                this["MLAstroRPACorrectionMode"] = value;
+            }
+        }
     }
 }

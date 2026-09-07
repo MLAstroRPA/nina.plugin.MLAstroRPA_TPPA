@@ -329,19 +329,43 @@ namespace NINA.Plugins.PolarAlignment.MLAstroRPA {
         }
 
         public override async Task MoveRelative(Axis axis, int speed, float position, CancellationToken token) {
+            if (axis == Axis.XAxis) XLastDirection = position >= 0 ? LastDirection.Positive : LastDirection.Negative;
+            if (axis == Axis.YAxis) YLastDirection = position >= 0 ? LastDirection.Positive : LastDirection.Negative;
+
+            var (deg, min, sec, dir) = ToDms(position);
+
+            string command = axis == Axis.XAxis
+                ? $"AzED:{deg},AzEM:{min},AzES:{sec.ToString("0.###", CultureInfo.InvariantCulture)},AzDi:{dir},AlED:0,AlEM:0,AlES:0,AlDi:1,AAll:1"
+                : $"AzED:0,AzEM:0,AzES:0,AzDi:1,AlED:{deg},AlEM:{min},AlES:{sec.ToString("0.###", CultureInfo.InvariantCulture)},AlDi:{dir},AAll:1";
+
+            await RunAlignMove(command, token);
+        }
+
+        /// <summary>
+        /// Di chuyển CẢ HAI trục (Az + Alt) trong MỘT lệnh ALIGN duy nhất — chạy đồng thời trên
+        /// thiết bị và chờ ALIGN_COMPLETED một lần. Nhanh hơn 2 lệnh NudgeX + NudgeY rời nhau.
+        /// </summary>
+        public async Task MoveBothAxes(float azArcMin, float altArcMin, CancellationToken token) {
+            if (azArcMin >= 0f) { XLastDirection = LastDirection.Positive; } else { XLastDirection = LastDirection.Negative; }
+            if (altArcMin >= 0f) { YLastDirection = LastDirection.Positive; } else { YLastDirection = LastDirection.Negative; }
+
+            var (azDeg, azMin, azSec, azDir) = ToDms(azArcMin);
+            var (alDeg, alMin, alSec, alDir) = ToDms(altArcMin);
+
+            string command = $"AzED:{azDeg},AzEM:{azMin},AzES:{azSec.ToString("0.###", CultureInfo.InvariantCulture)},AzDi:{azDir}," +
+                             $"AlED:{alDeg},AlEM:{alMin},AlES:{alSec.ToString("0.###", CultureInfo.InvariantCulture)},AlDi:{alDir},AAll:1";
+
+            await RunAlignMove(command, token);
+        }
+
+        /// <summary>
+        /// Gửi một lệnh ALIGN rồi chờ đến khi firmware báo READY/ALIGN_COMPLETED (poll "?" định kỳ).
+        /// </summary>
+        private async Task RunAlignMove(string command, CancellationToken token) {
             TaskCompletionSource<string> completionSource;
 
             await semaphore.WaitAsync(token);
             try {
-                if (axis == Axis.XAxis) XLastDirection = position >= 0 ? LastDirection.Positive : LastDirection.Negative;
-                if (axis == Axis.YAxis) YLastDirection = position >= 0 ? LastDirection.Positive : LastDirection.Negative;
-
-                var (deg, min, sec, dir) = ToDms(position);
-
-                string command = axis == Axis.XAxis
-                    ? $"AzED:{deg},AzEM:{min},AzES:{sec.ToString("0.###", CultureInfo.InvariantCulture)},AzDi:{dir},AlED:0,AlEM:0,AlES:0,AlDi:1,AAll:1"
-                    : $"AzED:0,AzEM:0,AzES:0,AzDi:1,AlED:{deg},AlEM:{min},AlES:{sec.ToString("0.###", CultureInfo.InvariantCulture)},AlDi:{dir},AAll:1";
-
                 completionSource = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
                 lock (alignmentSync) {
                     alignmentCompletionSource = completionSource;
@@ -372,16 +396,16 @@ namespace NINA.Plugins.PolarAlignment.MLAstroRPA {
             var timeoutTask = Task.Delay(TimeSpan.FromSeconds(90), timeoutCts.Token);
 
             // Poll "?" periodically until the device reports READY or ALIGN_COMPLETED
-                var pollingTask = Task.Run(async () => {
+            var pollingTask = Task.Run(async () => {
                 while (!completionSource.Task.IsCompleted) {
                     try {
-                            await semaphore.WaitAsync(timeoutCts.Token);
-                            try {
-                                // indicate this ReadStatusResponse call follows an explicit query
-                                IsExpectingStatusResponse = true;
-                                Port.WriteLine(StatusQueryCommand);
-                                var line = ReadStatusResponse(Port)?.Trim();
-                                IsExpectingStatusResponse = false;
+                        await semaphore.WaitAsync(timeoutCts.Token);
+                        try {
+                            // indicate this ReadStatusResponse call follows an explicit query
+                            IsExpectingStatusResponse = true;
+                            Port.WriteLine(StatusQueryCommand);
+                            var line = ReadStatusResponse(Port)?.Trim();
+                            IsExpectingStatusResponse = false;
                             Logger.Info($"[MLAstroRPA] Poll status: {line}");
                             if (!string.IsNullOrWhiteSpace(line)) {
                                 UpdateStatusFromLine(line);

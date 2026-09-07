@@ -205,29 +205,61 @@ namespace NINA.Plugins.PolarAlignment {
                 correctionFactor = Math.Clamp((float)(mlAstroRPA.MLAstroRPACorrectionFactorPercent / 100.0), 0.01f, 1f);
             }
 
+            // Chế độ hiệu chỉnh tự động: "Both" (mặc định) = sửa CẢ 2 trục trong cùng 1 lượt
+            // bằng 1 lệnh ALIGN duy nhất (đồng thời thật); "Auto" = chỉ sửa trục có sai số lớn
+            // hơn trong lượt này (hành vi cũ).
+            var correctionMode = (mlAstroRPA?.MLAstroRPACorrectionMode ?? "Auto").ToUpperInvariant();
+            var correctBoth = correctionMode == "BOTH";
+
             var xGreaterThanY = Math.Abs(az.Degree) > Math.Abs(alt.Degree);
-            if (xGreaterThanY) {
-                float azAdjustment = (float)az.ArcMinutes * azimuthSign * correctionFactor * detectFraction;
-                progress?.Report(new ApplicationStatus() { Status = $"Nudging along Az axis by {Math.Round(azAdjustment, 2)}" });
-                await activeSystem.NudgeX(azAdjustment, token);
-                lastMovement = new Movement(azAdjustment, 0, azimuthSign, lastMovement?.AltitudeSign ?? 1f, az.Degree, alt.Degree);
-            } else {
+            var correctAz = correctBoth || (!correctBoth && xGreaterThanY);
+            var correctAlt = correctBoth || (!correctBoth && !xGreaterThanY);
+
+            float? azAdjustment = null;
+            float? altAdjustment = null;
+
+            if (correctAz) {
+                azAdjustment = (float)az.ArcMinutes * azimuthSign * correctionFactor * detectFraction;
+            }
+
+            if (correctAlt) {
                 // Alt-axis correction. When overshoot is enabled for the current (on-screen)
                 // correction direction, move the full 100% of the error plus the configured
                 // overshoot past the target. Otherwise (master "Enable overshoot" off, or the
                 // direction's "Run overshoot" checkbox off) correct only the configured safety
                 // factor of the error (default 75%), matching the Azimuth-axis factor.
                 var altOvershootEnabled = IsAltitudeOvershootEnabled(activeSystem);
-                float altAdjustment = (float)alt.ArcMinutes * altitudeSign;
+                float altValue = (float)alt.ArcMinutes * altitudeSign;
                 if (altOvershootEnabled) {
-                    altAdjustment += Math.Sign(altAdjustment) * GetAltitudeOvershootArcMin(activeSystem);
+                    altValue += Math.Sign(altValue) * GetAltitudeOvershootArcMin(activeSystem);
                 } else {
-                    altAdjustment *= correctionFactor;
+                    altValue *= correctionFactor;
                 }
-                altAdjustment *= detectFraction;
-                progress?.Report(new ApplicationStatus() { Status = $"Nudging along Alt axis by {Math.Round(altAdjustment, 2)}" });
-                await activeSystem.NudgeY(altAdjustment, token);
-                lastMovement = new Movement(0, altAdjustment, lastMovement?.AzimuthSign ?? 1f, altitudeSign, az.Degree, alt.Degree);
+                altValue *= detectFraction;
+                altAdjustment = altValue;
+            }
+
+            if (azAdjustment.HasValue && altAdjustment.HasValue) {
+                // Cả 2 trục trong cùng 1 lượt bằng 1 lệnh ALIGN duy nhất (đồng thời thật).
+                var azValue = azAdjustment.Value;
+                var altValue = altAdjustment.Value;
+                progress?.Report(new ApplicationStatus() { Status = $"Nudging Az+Alt together: Az {Math.Round(azValue, 2)}', Alt {Math.Round(altValue, 2)}'" });
+                if (mlAstroRPA != null) {
+                    await mlAstroRPA.NudgeAll(azValue, altValue, token);
+                } else {
+                    // Fallback (hệ không phải MLAstroRPA): 2 lệnh nối tiếp.
+                    await activeSystem.NudgeX(azValue, token);
+                    await activeSystem.NudgeY(altValue, token);
+                }
+                lastMovement = new Movement(azValue, altValue, azimuthSign, altitudeSign, az.Degree, alt.Degree);
+            } else if (azAdjustment.HasValue) {
+                progress?.Report(new ApplicationStatus() { Status = $"Nudging along Az axis by {Math.Round(azAdjustment.Value, 2)}" });
+                await activeSystem.NudgeX(azAdjustment.Value, token);
+                lastMovement = new Movement(azAdjustment.Value, 0, azimuthSign, lastMovement?.AltitudeSign ?? 1f, az.Degree, alt.Degree);
+            } else if (altAdjustment.HasValue) {
+                progress?.Report(new ApplicationStatus() { Status = $"Nudging along Alt axis by {Math.Round(altAdjustment.Value, 2)}" });
+                await activeSystem.NudgeY(altAdjustment.Value, token);
+                lastMovement = new Movement(0, altAdjustment.Value, lastMovement?.AzimuthSign ?? 1f, altitudeSign, az.Degree, alt.Degree);
             }
 
             await CoreUtil.Wait(TimeSpan.FromSeconds(activeSystem.AutomatedAdjustmentSettleTime), token, progress, "Settling");

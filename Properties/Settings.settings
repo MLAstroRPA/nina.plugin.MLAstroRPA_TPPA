@@ -155,5 +155,8 @@
     <Setting Name="MLAstroRPACorrectionFactorPercent" Type="System.Double" Scope="User">
       <Value Profile="(Default)">75</Value>
     </Setting>
+    <Setting Name="MLAstroRPACorrectionMode" Type="System.String" Scope="User">
+      <Value Profile="(Default)">Both</Value>
+    </Setting>
   </Settings>
 </SettingsFile>

@@ -1,10 +1,13 @@
 using NINA.Core.Utility;
+using NINA.Core.Utility.Notification;
 using System;
 using System.ComponentModel;
 using System.IO.Ports;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
+using System.Windows;
 using NINA.Profile.Interfaces;
 
 namespace NINA.Plugins.PolarAlignment.MLAstroRPA
@@ -157,7 +160,48 @@ namespace NINA.Plugins.PolarAlignment.MLAstroRPA
                 RaisePropertyChanged();
             }
         }
+
+        /// <summary>
+        /// Chế độ hiệu chỉnh tự động: "Auto" = mỗi lượt chỉ sửa trục có sai số lớn hơn;
+        /// "Both" (mặc định) = sửa CẢ 2 trục trong cùng 1 lượt bằng 1 lệnh ALIGN duy nhất.
+        /// </summary>
+        public string MLAstroRPACorrectionMode {
+            get => Properties.Settings.Default.MLAstroRPACorrectionMode;
+            set {
+                Properties.Settings.Default.MLAstroRPACorrectionMode = value;
+                CoreUtil.SaveSettings(Properties.Settings.Default);
+                RaisePropertyChanged();
+            }
+        }
+
         public override float XBacklashCompensation { get => 0f; set { } }
+
+        /// <summary>
+        /// Nudge CẢ HAI trục Az + Alt trong MỘT lệnh ALIGN duy nhất (chạy đồng thời trên thiết
+        /// bị) và chờ ALIGN_COMPLETED một lần — nhanh hơn 2 lệnh NudgeX + NudgeY rời nhau.
+        /// Áp dụng đảo chiều ReverseAzimuth/ReverseAltitude giống NudgeX/NudgeY.
+        /// </summary>
+        public async Task NudgeAll(float azArcMin, float altArcMin, CancellationToken token) {
+            try {
+                if (!EnableAutoReverse && ReverseAzimuth) { azArcMin = azArcMin * -1f; }
+                if (!EnableAutoReverse && ReverseAltitude) { altArcMin = altArcMin * -1f; }
+                await Application.Current.Dispatcher.BeginInvoke(() => IsNotMoving = false);
+
+                Logger.Info($"[MLAstroRPA] Nudging both axes in one ALIGN: Az={azArcMin:0.###}', Alt={altArcMin:0.###}'");
+                if (upa is UniversalPolarAlignmentMLAstroRPA driver) {
+                    await driver.MoveBothAxes(azArcMin, altArcMin, token).ConfigureAwait(false);
+                } else {
+                    throw new InvalidOperationException("MLAstroRPA driver not available for combined NudgeAll.");
+                }
+            } catch (Exception ex) {
+                Logger.Error(ex);
+                if (ex is TimeoutException) {
+                    Notification.ShowError($"Movement timeout: {ex.Message}");
+                }
+            } finally {
+                await Application.Current.Dispatcher.BeginInvoke(() => IsNotMoving = true);
+            }
+        }
 
         private async Task TestConnectAsync()
         {

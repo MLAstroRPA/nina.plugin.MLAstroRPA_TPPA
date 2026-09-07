@@ -27,6 +27,7 @@
     <s:String x:Key="MLAstroRPAEnableAutoReverseToolTip">When enabled, the plugin automatically reverses an axis when it detects the mount moving the wrong way, so the two manual Reverse toggles below are disabled. When disabled (default), only the Reverse Azimuth / Reverse Altitude toggles set the direction.</s:String>
     <s:String x:Key="MLAstroRPADetectDirectionToolTip">While auto-reverse is enabled, the very first nudge only moves this percentage of the required correction so the plugin can detect whether the axis direction is correct before committing the full move. Range: 1–100 %.</s:String>
     <s:String x:Key="MLAstroRPACorrectionFactorToolTip">Safety factor applied to the automated correction moves (Azimuth axis always, and Altitude axis when overshoot is not used for that direction). 100 % corrects the full measured error; lower values correct only a percentage of it. Range: 1–100 % (default 75).</s:String>
+    <s:String x:Key="MLAstroRPACorrectionModeToolTip">How the automated loop corrects polar alignment. Auto = only the axis with the larger error is nudged this pass (the other axis is measured again first). Both axes together = Azimuth + Altitude are corrected at the same time in a single ALIGN command (faster).</s:String>
     <DataTemplate x:Key="MLAstroRPA+TPPA_Options">
         <DockPanel Loaded="OnOptionsRootLoaded">
             <view:HeaderBar DockPanel.Dock="Top"
@@ -376,42 +377,30 @@
                         </x:Array>
                     </ComboBox.ItemsSource>
                 </ComboBox>
+                <!-- 2026-09-07: "Enable auto-reverse" + "Detecting direction offset" tạm ẨN trên
+                     UI (setting MLAstroRPAEnableAutoReverse mặc định OFF). Giữ code để có thể bật
+                     lại sau này nếu cần. -->
                 <TextBlock
                     Grid.Row="18"
                     Margin="0,5,0,0"
                     VerticalAlignment="Center"
-                    Text="Enable auto-reverse"
-                    ToolTip="{StaticResource MLAstroRPAEnableAutoReverseToolTip}"
+                    Text="Correction axis mode"
+                    ToolTip="{StaticResource MLAstroRPACorrectionModeToolTip}"
                     Visibility="{Binding IsMLAstroRPASelected, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                <CheckBox
+                <ComboBox
                     Grid.Row="18"
                     Grid.Column="1"
-                    MinWidth="80"
+                    MinWidth="120"
                     Margin="0,5,0,0"
                     HorizontalAlignment="Left"
                     VerticalAlignment="Center"
-                    IsChecked="{Binding ActiveSystem.EnableAutoReverse}"
-                    ToolTip="{StaticResource MLAstroRPAEnableAutoReverseToolTip}"
-                    Visibility="{Binding IsMLAstroRPASelected, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                <TextBlock
-                    Grid.Row="19"
-                    Margin="0,5,0,0"
-                    VerticalAlignment="Center"
-                    Text="Detecting direction offset"
-                    ToolTip="{StaticResource MLAstroRPADetectDirectionToolTip}"
-                    Visibility="{Binding IsMLAstroRPASelected, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                <ninactrl:UnitTextBox
-                    Grid.Row="19"
-                    Grid.Column="1"
-                    MinWidth="80"
-                    Margin="0,5,0,0"
-                    HorizontalAlignment="Left"
-                    VerticalAlignment="Center"
-                    IsEnabled="{Binding ActiveSystem.EnableAutoReverse}"
-                    Text="{Binding ActiveSystem.MLAstroRPAReverseDetectPercent}"
-                    ToolTip="{StaticResource MLAstroRPADetectDirectionToolTip}"
-                    Unit="%"
-                    Visibility="{Binding IsMLAstroRPASelected, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                    SelectedValue="{Binding ActiveSystem.MLAstroRPACorrectionMode}"
+                    SelectedValuePath="Tag"
+                    ToolTip="{StaticResource MLAstroRPACorrectionModeToolTip}"
+                    Visibility="{Binding IsMLAstroRPASelected, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <ComboBoxItem Content="Auto (largest error first)" Tag="Auto" />
+                    <ComboBoxItem Content="Both axes together (one ALIGN)" Tag="Both" />
+                </ComboBox>
                 <TextBlock
                     Grid.Row="20"
                     Margin="0,5,0,0"
