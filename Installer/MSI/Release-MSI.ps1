@@ -22,6 +22,18 @@ $PluginCsproj = Join-Path $ProjectRoot "MLAstroRPA_TPPA.csproj"
 $msiPrefix = "MLAstroRPA_TPPA_Plugin"
 $msiNamePattern = 'MLAstroRPA_TPPA_Plugin_(\d+\.\d+\.\d+(\.\d+)?)\.msi'
 
+# Returns the MSI in $OutputDir with the HIGHEST NUMERIC version. Do NOT sort by Name:
+# a string sort mis-ranks e.g. 2.0.0.10 BELOW 2.0.0.9 ('1' < '9' at the 7th char),
+# which would make an already-built .10 never be detected as the newest.
+# Files that don't match the naming convention sort as 0.0.0.0 so they never win.
+function Get-NewestMsi {
+    Get-ChildItem -Path $OutputDir -Filter "$msiPrefix*.msi" -ErrorAction SilentlyContinue |
+        Sort-Object -Property @{ Expression = {
+            if ($_.Name -match $msiNamePattern) { [version]$matches[1] } else { [version]"0.0.0.0" }
+        } } -Descending |
+        Select-Object -First 1
+}
+
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host "MLAstroRPA+TPPA Plugin - MSI Builder" -ForegroundColor Cyan
 Write-Host "============================================" -ForegroundColor Cyan
@@ -37,8 +49,7 @@ if ($ReleaseOnly) {
         exit 1
     }
 
-    $existingMsi = Get-ChildItem -Path $OutputDir -Filter "$msiPrefix*.msi" -ErrorAction SilentlyContinue |
-                   Sort-Object Name -Descending | Select-Object -First 1
+    $existingMsi = Get-NewestMsi
     if (-not $existingMsi -or $existingMsi.Name -notmatch $msiNamePattern) {
         Write-Host "ERROR: No MSI found in Output ($OutputDir). Build the new version first with '.NET Build MSI'." -ForegroundColor Red
         exit 1
@@ -52,9 +63,11 @@ if ($ReleaseOnly) {
 }
 
 # ========== VERSION PUMP ==========
+# When no -Version is passed, pick the next version following the 4-part scheme
+# Major.Minor.Build.Revision. Bumping a component resets all components to its
+# right to 0 (e.g. 2.0.0.10 + Minor -> 2.1.0.0, + Major -> 3.0.0.0).
 if ([string]::IsNullOrWhiteSpace($Version)) {
-    $existingMsi = Get-ChildItem -Path $OutputDir -Filter "$msiPrefix*.msi" -ErrorAction SilentlyContinue |
-                   Sort-Object Name -Descending | Select-Object -First 1
+    $existingMsi = Get-NewestMsi
     $currentVersion = $null
 
     if ($existingMsi) {
@@ -68,22 +81,36 @@ if ([string]::IsNullOrWhiteSpace($Version)) {
         Write-Host "Output: no MSI yet." -ForegroundColor Yellow
     }
 
-    # Suggest the next patch version (e.g. 2.3.0.0 -> 2.3.0.1)
-    $suggested = "2.3.0.0"
-    if ($currentVersion -match '^(\d+)\.(\d+)\.(\d+)$') {
-        $suggested = "{0}.{1}.{2}" -f $matches[1], $matches[2], ([int]$matches[3] + 1)
-    } elseif ($currentVersion -match '^(\d+)\.(\d+)\.(\d+)\.(\d+)$') {
-        $suggested = "{0}.{1}.{2}.{3}" -f $matches[1], $matches[2], $matches[3], ([int]$matches[4] + 1)
-    }
+    # Normalize to 4 numeric parts (pad missing components with 0, e.g. 2.3.1 -> 2.3.1.0)
+    $baseVersion = if ($currentVersion) { $currentVersion } else { "2.3.0.0" }
+    $parts = ($baseVersion -split '\.') + @('0', '0', '0', '0')
+    $major    = [int]$parts[0]
+    $minor    = [int]$parts[1]
+    $build    = [int]$parts[2]
+    $revision = [int]$parts[3]
+
+    Write-Host ""
+    Write-Host "Choose the level to bump (4-part versioning: Major.Minor.Build.Revision):" -ForegroundColor Cyan
+    Write-Host "  [1] Major    - breaking/incompatible change       -> $($major + 1).0.0.0" -ForegroundColor Yellow
+    Write-Host "  [2] Minor    - new feature (backward compatible)  -> $major.$($minor + 1).0.0" -ForegroundColor Yellow
+    Write-Host "  [3] Build    - build/milestone number             -> $major.$minor.$($build + 1).0" -ForegroundColor Yellow
+    Write-Host "  [4] Revision - bug fix / hotfix (default)         -> $major.$minor.$build.$($revision + 1)" -ForegroundColor Yellow
 
     do {
-        $Version = Read-Host "Enter new version [default: $suggested]"
-        if ([string]::IsNullOrWhiteSpace($Version)) { $Version = $suggested }
-        if ($Version -notmatch '^\d+\.\d+\.\d+(\.\d+)?$') {
-            Write-Host "Invalid version format - use e.g. 2.3.0.1" -ForegroundColor Red
-            $Version = ""
+        $choice = Read-Host "Enter choice [default: 4]"
+        if ([string]::IsNullOrWhiteSpace($choice)) { $choice = "4" }
+        if ($choice -notmatch '^[1-4]$') {
+            Write-Host "Invalid choice - enter 1, 2, 3 or 4." -ForegroundColor Red
+            $choice = ""
         }
-    } while ([string]::IsNullOrWhiteSpace($Version))
+    } while ([string]::IsNullOrWhiteSpace($choice))
+
+    switch ($choice) {
+        "1" { $Version = "$($major + 1).0.0.0" }
+        "2" { $Version = "$major.$($minor + 1).0.0" }
+        "3" { $Version = "$major.$minor.$($build + 1).0" }
+        "4" { $Version = "$major.$minor.$build.$($revision + 1)" }
+    }
 
     Write-Host "Version set to: $Version" -ForegroundColor Green
 }
