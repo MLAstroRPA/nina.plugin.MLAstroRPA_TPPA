@@ -9,7 +9,36 @@
 > with MPL-2.0: retain the license and notices, credit the original author, and make the source
 > (including your modifications) available.
 
-## 2.3.0.0 — Merged MLAstroRPA into TPPA (nina.plugin.MLAstroRPA_TPPA)
+## 2.0.0.10 
+
+### TPPA / automated correction
+
+- **Press Start to begin the automated adjustment.** After the three measurement points and the
+  error calculation, when automated adjustments are enabled the routine now connects to the
+  selected polar alignment system and then **pauses** — nothing is nudged until the user presses
+  Start/Resume (the dock Play button). A dedicated *"Press Start to begin the automated
+  adjustment."* notification is shown right after the *"Successfully connected"* toast. The
+  routine no longer starts correcting immediately after the first error solve.
+- **No `STOP:1` when pausing right after connect.** The initial pause that waits for Start no
+  longer sends the motor-stop command (nothing is moving yet); pausing mid-correction still stops
+  a running move as before.
+- **Fix false "Unable to connect" error.** The connect-success toast and its toast cleanup are now
+  raised on the UI thread — previously `CloseAll` could throw from a background thread and show a
+  misleading *"Unable to connect to MLAstroRPA"* error even though the hardware had connected.
+- **Correction axis mode** (MLAstroRPA option): choose between **Auto** — only the axis with the
+  larger error is corrected per pass (previous behaviour) — and **Both axes together** (default):
+  Azimuth + Altitude are corrected in a **single ALIGN command** that runs both axes at the same
+  time on the device (`ALIGN_COMPLETED` awaited once), which is faster than two separate nudges.
+- **Auto-reverse hidden and off by default.** The *"Enable auto-reverse"* / *"Detecting
+  direction"* controls are hidden on the options page and the feature is disabled by default;
+  axis direction is set with the Reverse Azimuth / Reverse Altitude toggles.
+- **Automated adjustment timeout** (new setting, minutes): the correction phase now **stops the
+  polar alignment automatically** when it exceeds the configured time (default 10 min, `0`
+  disables it) without reaching the alignment tolerance — replacing the old fixed 5-minute
+  "still running, consider restarting" reminder that never stopped. Time spent waiting for
+  Start / auto-pause is not counted towards the timeout.
+
+## 2.0.0.9 — Merged MLAstroRPA into TPPA (nina.plugin.MLAstroRPA_TPPA)
 
 Single options page with top-level tabs — **TPPA OPTION**, **CONTROL**, **CONNECTION**,
 **CONFIGURATION** — and a single `IPluginManifest` (`PolarAlignmentPlugin`); the MLAstro
