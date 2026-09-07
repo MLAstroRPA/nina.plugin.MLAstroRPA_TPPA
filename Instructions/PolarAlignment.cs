@@ -368,11 +368,16 @@ namespace NINA.Plugins.PolarAlignment.Instructions {
             } catch (Exception) { }
         }
 
-        public void Pause() {
-            try {
-                _ = PolarAlignmentPlugin.ActiveAlignmentSystemVM?.Abort(CancellationToken.None);
-            } catch (Exception ex) {
-                Logger.Error(ex);
+        public void Pause(bool sendAbort = true) {
+            // sendAbort = true (mặc định): dừng chuyển động đang chạy (gửi STOP:1) rồi pause.
+            // sendAbort = false: chỉ đơn thuần chờ — dùng cho cổng chặn ngay sau khi mở cổng COM,
+            // khi chưa có chuyển động nào để dừng, nên KHÔNG gửi lệnh STOP:1 vào thiết bị.
+            if (sendAbort) {
+                try {
+                    _ = PolarAlignmentPlugin.ActiveAlignmentSystemVM?.Abort(CancellationToken.None);
+                } catch (Exception ex) {
+                    Logger.Error(ex);
+                }
             }
 
             if (pauseTS != null) {
@@ -556,10 +561,28 @@ namespace NINA.Plugins.PolarAlignment.Instructions {
 
                     TPAPAVM.ActivateFourthStep();
 
-                    if (TPAPAVM.ActiveAlignmentSystemVM != null) {
-                        await TPAPAVM.ActiveAlignmentSystemVM.Connect();
-                        if (TPAPAVM.ActiveAlignmentSystemVM.DoAutomatedAdjustments && !TPAPAVM.ActiveAlignmentSystemVM.Connected) {
+                    var alignmentSystem = TPAPAVM.ActiveAlignmentSystemVM;
+                    if (alignmentSystem != null) {
+                        // Ở chế độ điều chỉnh tự động ta sẽ chặn Pause ngay sau khi mở cổng COM
+                        // thành công (trước vòng hiệu chỉnh / mọi NudgeX-NudgeY) để người dùng nhấn
+                        // Start mới bắt đầu.
+                        var waitForStart = alignmentSystem.DoAutomatedAdjustments;
+                        await alignmentSystem.Connect();
+                        if (waitForStart && !alignmentSystem.Connected) {
                             throw new SequenceEntityFailedException("Unable to connect to Polar Alignment system. Cancelling polar alignment routine as automated adjustments are impossible.");
+                        }
+
+                        // Cổng chặn: sau khi mở cổng COM thành công, dừng lại chờ người dùng nhấn
+                        // Start. Vòng lặp hiệu chỉnh phía dưới dừng ngay tại WaitIfPaused ở đầu vòng
+                        // — chưa có NudgeX/NudgeY nào được thực thi cho tới khi Start/Resume.
+                        // KHÔNG gửi Abort/STOP:1 ở đây: chưa có chuyển động nào để dừng và vừa mới
+                        // mở cổng, nên không gửi lệnh STOP vào thiết bị.
+                        if (waitForStart) {
+                            Pause(sendAbort: false);
+
+                            // Lời nhắc RIÊNG, hiện sau toast kết nối COM thành công, nhắc người
+                            // dùng nhấn Start để bắt đầu điều chỉnh tự động.
+                            Notification.ShowInformation("Press Start to begin the automated adjustment.");
                         }
                     }
 

@@ -75,7 +75,16 @@ namespace NINA.Plugins.PolarAlignment {
                     upa = CreateSystem();
                     _ = StartPoll();
                     Connected = true;
-                    Notification.ShowInformation($"Successfully connected to {SystemName}");
+
+                    // CloseAll + toast phải chạy trên UI thread: CloseAll() truy cập các
+                    // DependencyObject của toast nên nếu gọi từ thread nền (Task.Run) sẽ ném
+                    // InvalidOperationException ("The calling thread cannot access this object...")
+                    // và làm connect báo lỗi sai dù đã kết nối thành công. Đóng hết toast cũ để
+                    // thông báo kết nối COM thành công luôn hiện rõ trên cùng.
+                    await Application.Current.Dispatcher.InvokeAsync(() => {
+                        Notification.CloseAll();
+                        Notification.ShowInformation($"Successfully connected to {SystemName}");
+                    });
                 } catch (Exception ex) {
                     Logger.Error(ex);
                     Notification.ShowError($"Unable to connect to {SystemName}");
