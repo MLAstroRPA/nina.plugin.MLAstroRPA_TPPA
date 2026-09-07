@@ -322,6 +322,21 @@ namespace NINA.Plugins.PolarAlignment {
             }
         }
 
+        /// <summary>
+        /// Thời gian tối đa (phút) cho giai đoạn hiệu chỉnh tự động. Khi vượt quá mà chưa đạt
+        /// dung sai, quá trình PA tự dừng lại. 0 = không giới hạn (mặc định 10 phút).
+        /// </summary>
+        public double AutomatedAdjustmentTimeout {
+            get {
+                return Properties.Settings.Default.AutomatedAdjustmentTimeout;
+            }
+            set {
+                Properties.Settings.Default.AutomatedAdjustmentTimeout = Math.Max(0, value);
+                CoreUtil.SaveSettings(Properties.Settings.Default);
+                RaisePropertyChanged();
+            }
+        }
+
         public event PropertyChangedEventHandler PropertyChanged;
         protected void RaisePropertyChanged([CallerMemberName] string propertyName = null) {
             this.PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));

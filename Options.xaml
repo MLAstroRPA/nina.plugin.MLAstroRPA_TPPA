@@ -28,6 +28,7 @@
     <s:String x:Key="MLAstroRPADetectDirectionToolTip">While auto-reverse is enabled, the very first nudge only moves this percentage of the required correction so the plugin can detect whether the axis direction is correct before committing the full move. Range: 1–100 %.</s:String>
     <s:String x:Key="MLAstroRPACorrectionFactorToolTip">Safety factor applied to the automated correction moves (Azimuth axis always, and Altitude axis when overshoot is not used for that direction). 100 % corrects the full measured error; lower values correct only a percentage of it. Range: 1–100 % (default 75).</s:String>
     <s:String x:Key="MLAstroRPACorrectionModeToolTip">How the automated loop corrects polar alignment. Auto = only the axis with the larger error is nudged this pass (the other axis is measured again first). Both axes together = Azimuth + Altitude are corrected at the same time in a single ALIGN command (faster).</s:String>
+    <s:String x:Key="AutomatedAdjustmentTimeoutToolTip">Maximum minutes the automated correction phase may run before the polar alignment stops itself automatically (safety limit). 0 disables the timeout. Time spent waiting (Start / auto-pause) is not counted.</s:String>
     <DataTemplate x:Key="MLAstroRPA+TPPA_Options">
         <DockPanel Loaded="OnOptionsRootLoaded">
             <view:HeaderBar DockPanel.Dock="Top"
@@ -401,6 +402,24 @@
                     <ComboBoxItem Content="Auto (largest error first)" Tag="Auto" />
                     <ComboBoxItem Content="Both axes together (one ALIGN)" Tag="Both" />
                 </ComboBox>
+                <TextBlock
+                    Grid.Row="19"
+                    Margin="0,5,0,0"
+                    VerticalAlignment="Center"
+                    Text="Automated adjustment timeout"
+                    ToolTip="{StaticResource AutomatedAdjustmentTimeoutToolTip}"
+                    Visibility="{Binding IsSystemSelected, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                <ninactrl:UnitTextBox
+                    Grid.Row="19"
+                    Grid.Column="1"
+                    MinWidth="80"
+                    Margin="0,5,0,0"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    Text="{Binding AutomatedAdjustmentTimeout}"
+                    ToolTip="{StaticResource AutomatedAdjustmentTimeoutToolTip}"
+                    Unit="min"
+                    Visibility="{Binding IsSystemSelected, Converter={StaticResource BooleanToVisibilityConverter}}" />
                 <TextBlock
                     Grid.Row="20"
                     Margin="0,5,0,0"

@@ -646,5 +646,17 @@ namespace NINA.Plugins.PolarAlignment.Properties {
                 this["MLAstroRPACorrectionMode"] = value;
             }
         }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("10")]
+        public double AutomatedAdjustmentTimeout {
+            get {
+                return ((double)(this["AutomatedAdjustmentTimeout"]));
+            }
+            set {
+                this["AutomatedAdjustmentTimeout"] = value;
+            }
+        }
     }
 }

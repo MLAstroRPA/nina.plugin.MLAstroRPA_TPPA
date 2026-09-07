@@ -158,5 +158,8 @@
     <Setting Name="MLAstroRPACorrectionMode" Type="System.String" Scope="User">
       <Value Profile="(Default)">Both</Value>
     </Setting>
+    <Setting Name="AutomatedAdjustmentTimeout" Type="System.Double" Scope="User">
+      <Value Profile="(Default)">10</Value>
+    </Setting>
   </Settings>
 </SettingsFile>

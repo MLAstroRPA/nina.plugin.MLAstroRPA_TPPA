@@ -593,9 +593,30 @@ namespace NINA.Plugins.PolarAlignment.Instructions {
 
                     await TPAPAVM.SelectNewReferenceStar(TPAPAVM.Center, localCTS.Token);
 
-                    var sw = Stopwatch.StartNew();
+                    // Đồng hồ đếm thời gian hiệu chỉnh TÍCH CỰC (không tính thời gian chờ
+                    // Start / auto-pause). Cài đặt "Automated adjustment timeout" (phút) giới
+                    // hạn tổng thời gian hiệu chỉnh; vượt quá mà chưa đạt dung sai → tự dừng PA.
+                    var sw = new Stopwatch();
+                    var adjustmentTimeout = Properties.Settings.Default.AutomatedAdjustmentTimeout > 0
+                        ? TimeSpan.FromMinutes(Properties.Settings.Default.AutomatedAdjustmentTimeout)
+                        : TimeSpan.MaxValue;
+
                     do {
+                        // Dừng đồng hồ trước khi chờ để thời gian pause không tính vào timeout.
+                        sw.Stop();
                         await WaitIfPaused(localCTS.Token, progress);
+                        sw.Start();
+
+                        if (sw.Elapsed >= adjustmentTimeout) {
+                            sw.Stop();
+                            Logger.Info($"[TPPA] Automated adjustment timed out after {Properties.Settings.Default.AutomatedAdjustmentTimeout} minutes without reaching tolerance.");
+                            Notification.CloseAll();
+                            Notification.ShowInformation(
+                                $"Automated adjustment timed out after {Properties.Settings.Default.AutomatedAdjustmentTimeout} minutes without reaching the alignment tolerance.{Environment.NewLine}Stopping polar alignment.",
+                                TimeSpan.FromMinutes(1));
+                            localCTS.Cancel();
+                            break;
+                        }
 
                         var continuousSolve = await Solve(TPAPAVM, 0, progress, localCTS.Token);
                         if (continuousSolve.Success) {
@@ -631,17 +652,13 @@ namespace NINA.Plugins.PolarAlignment.Instructions {
                                     TimeSpan.FromMinutes(1));
                                 localCTS.Cancel();
                             }
-                            if (sw.Elapsed > TimeSpan.FromMinutes(5)) {
-                                Logger.Info("Correction phase exceeded 5 minutes");
-                                Notification.ShowInformation($"Polar alignment correction phase has been running for multiple minutes.{Environment.NewLine}Consider restarting the process to improve precision");
-                                sw.Stop();
-                                sw.Reset();
-                            }
                             localCTS.Token.ThrowIfCancellationRequested();
                             await TPAPAVM.MoveCloser(progress, localCTS.Token);
                         }
 
                         if (Properties.Settings.Default.AutoPause) {
+                            // Dừng đồng hồ để khoảng chờ giữa các lần chụp không tính vào timeout.
+                            sw.Stop();
                             Pause();
                         }
                     } while (!localCTS.Token.IsCancellationRequested);
