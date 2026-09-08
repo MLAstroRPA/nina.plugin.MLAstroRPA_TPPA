@@ -62,57 +62,27 @@ if ($ReleaseOnly) {
     Write-Host ""
 }
 
-# ========== VERSION PUMP ==========
-# When no -Version is passed, pick the next version following the 4-part scheme
-# Major.Minor.Build.Revision. Bumping a component resets all components to its
-# right to 0 (e.g. 2.0.0.10 + Minor -> 2.1.0.0, + Major -> 3.0.0.0).
+# ========== VERSION RESOLUTION ==========
+# Version is decided BEFORE the build — by the `version-pump` skill (or manually),
+# which stamps it into the plugin csproj (<Version>/<AssemblyVersion>/...) and adds the
+# matching Changelog.md entry. This script NO LONGER bumps/chooses a version while
+# building the MSI; it only reads the version already set in the csproj.
+# (-ReleaseOnly above already resolved $Version from the newest MSI in Output, so this
+# block is skipped in that mode.)
 if ([string]::IsNullOrWhiteSpace($Version)) {
-    $existingMsi = Get-NewestMsi
-    $currentVersion = $null
-
-    if ($existingMsi) {
-        if ($existingMsi.Name -match $msiNamePattern) {
-            $currentVersion = $matches[1]
-            Write-Host "Current version in Output: $currentVersion  ($($existingMsi.Name))" -ForegroundColor Green
-        } else {
-            Write-Host "Found in Output: $($existingMsi.Name) (cannot parse version)" -ForegroundColor Yellow
+    if (Test-Path $PluginCsproj) {
+        $csprojContent = [System.IO.File]::ReadAllText($PluginCsproj)
+        $verMatch = [regex]::Match($csprojContent, '<Version>([^<]+)</Version>')
+        if ($verMatch.Success -and $verMatch.Groups[1].Value -match '^\d+\.\d+\.\d+(\.\d+)?$') {
+            $Version = $verMatch.Groups[1].Value
+            Write-Host "Version resolved from plugin csproj: $Version" -ForegroundColor Green
         }
-    } else {
-        Write-Host "Output: no MSI yet." -ForegroundColor Yellow
     }
-
-    # Normalize to 4 numeric parts (pad missing components with 0, e.g. 2.3.1 -> 2.3.1.0)
-    $baseVersion = if ($currentVersion) { $currentVersion } else { "2.3.0.0" }
-    $parts = ($baseVersion -split '\.') + @('0', '0', '0', '0')
-    $major    = [int]$parts[0]
-    $minor    = [int]$parts[1]
-    $build    = [int]$parts[2]
-    $revision = [int]$parts[3]
-
-    Write-Host ""
-    Write-Host "Choose the level to bump (4-part versioning: Major.Minor.Build.Revision):" -ForegroundColor Cyan
-    Write-Host "  [1] Major    - breaking/incompatible change       -> $($major + 1).0.0.0" -ForegroundColor Yellow
-    Write-Host "  [2] Minor    - new feature (backward compatible)  -> $major.$($minor + 1).0.0" -ForegroundColor Yellow
-    Write-Host "  [3] Build    - build/milestone number             -> $major.$minor.$($build + 1).0" -ForegroundColor Yellow
-    Write-Host "  [4] Revision - bug fix / hotfix (default)         -> $major.$minor.$build.$($revision + 1)" -ForegroundColor Yellow
-
-    do {
-        $choice = Read-Host "Enter choice [default: 4]"
-        if ([string]::IsNullOrWhiteSpace($choice)) { $choice = "4" }
-        if ($choice -notmatch '^[1-4]$') {
-            Write-Host "Invalid choice - enter 1, 2, 3 or 4." -ForegroundColor Red
-            $choice = ""
-        }
-    } while ([string]::IsNullOrWhiteSpace($choice))
-
-    switch ($choice) {
-        "1" { $Version = "$($major + 1).0.0.0" }
-        "2" { $Version = "$major.$($minor + 1).0.0" }
-        "3" { $Version = "$major.$minor.$($build + 1).0" }
-        "4" { $Version = "$major.$minor.$build.$($revision + 1)" }
+    if ([string]::IsNullOrWhiteSpace($Version)) {
+        Write-Host "ERROR: No -Version given and no valid <Version> found in the plugin csproj ($PluginCsproj)." -ForegroundColor Red
+        Write-Host "Set the version first (e.g. via the version-pump skill) or pass -Version." -ForegroundColor Yellow
+        exit 1
     }
-
-    Write-Host "Version set to: $Version" -ForegroundColor Green
 }
 
 # ========== BUILD / SYNC PHASES (SKIPPED when -ReleaseOnly) ==========
