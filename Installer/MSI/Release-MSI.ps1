@@ -88,6 +88,33 @@ if ([string]::IsNullOrWhiteSpace($Version)) {
 # ========== BUILD / SYNC PHASES (SKIPPED when -ReleaseOnly) ==========
 if (-not $ReleaseOnly) {
 
+    # ========== VERSION MISMATCH CHECK ==========
+    # Compare the version about to be built with the top Changelog.md entry. If they differ,
+    # the version was probably not pumped (version-pump skill) - pause and ask to continue/abort.
+    $changelogPath = Join-Path $ProjectRoot "Changelog.md"
+    $clVer = $null
+    if (Test-Path $changelogPath) {
+        foreach ($clLine in Get-Content $changelogPath) {
+            if ($clLine -match '^##\s*\[?(\d+\.\d+\.\d+(\.\d+)?)') {
+                $clVer = $matches[1]
+                break
+            }
+        }
+    }
+    if (-not $clVer) {
+        Write-Host "WARNING: Could not parse the top Changelog.md version - cannot verify the pump." -ForegroundColor Yellow
+    } elseif ($clVer -ne $Version) {
+        Write-Host "WARNING: csproj version $Version does NOT match the top Changelog.md entry $clVer." -ForegroundColor Yellow
+        Write-Host "You may have forgotten to bump the version (version-pump skill)." -ForegroundColor Yellow
+        $confirm = Read-Host "Continue building the MSI at $Version anyway? (y/N)"
+        if ($confirm -notmatch '^[yY]$') {
+            Write-Host "Aborted - run the version-pump skill first, then build again." -ForegroundColor Red
+            exit 1
+        }
+    } else {
+        Write-Host "Version check OK - csproj ($Version) matches the top Changelog entry." -ForegroundColor Green
+    }
+
     # Sync the ProductVersion define in Package.wxs with the chosen version
     $wxsContent = [System.IO.File]::ReadAllText($PackageWxs)
     if ($wxsContent -match '<\?define ProductVersion = "[^"]*" \?>') {
