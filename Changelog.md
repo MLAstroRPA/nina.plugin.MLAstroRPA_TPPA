@@ -9,6 +9,25 @@
 > with MPL-2.0: retain the license and notices, credit the original author, and make the source
 > (including your modifications) available.
 
+## 2.0.2.0
+
+### MLAstroRPA — dockable layout cleanup
+
+- **Removed the `🏠 SET HOME HERE` and `⚠️ RESET HOME` buttons** from the *Position* section of the
+  MLAstroRPA dockable. The home reference is no longer set/cleared from the docking window (it stays
+  available from the CONFIGURATION tab / WebUI); the `↻ RETURN TO HOME` button remains.
+- **`↻ RETURN TO HOME` restyled** with the accent blue used by the Align direction toggle ON state
+  (`#3498DB`, white text, rounded corners), auto-sized to its label, `40 px` high (same height as
+  `✓ ALIGN ALL`) and with dedicated hover / pressed / disabled states.
+- **`✓ ALIGN ALL` width now matches** the `↻ RETURN TO HOME` button so both sit in an aligned column.
+
+### Installer / build tooling
+
+- The MSI build (`Release-MSI.ps1`) now compares the version about to be packaged with the top
+  `Changelog.md` entry and **pauses for confirmation when they differ**, so a forgotten version pump
+  can no longer be packaged silently; `Package.wxs` `ProductVersion` is synced from the resolved
+  version as before.
+
 ## 2.0.0.10 
 
 ### TPPA / automated correction

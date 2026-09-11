@@ -166,6 +166,44 @@
             </Setter>
         </Style>
 
+        <!-- Primary (accent) Button Style - solid blue like the Align toggle ON state -->
+        <Style x:Key="PrimaryButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="#3498DB"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderBrush" Value="#3498DB"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Padding" Value="10,4"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="4">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#2980B9"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#2980B9"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#2471A3"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#2471A3"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="border" Property="Opacity" Value="0.45"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
     </UserControl.Resources>
 
     <!-- CONTENT - Scrollable -->
@@ -363,25 +401,15 @@
                         <Run Text="{Binding HomedStatus}" FontWeight="Bold"/>
                     </TextBlock>
 
-                    <!-- Home Buttons -->
+                    <!-- Home Button -->
                     <WrapPanel Margin="0,0,0,0">
-                        <Button Content="🏠 SET HOME HERE" 
-                                Width="150" 
-                                Margin="0,0,5,5"
-                                Command="{Binding SetHomeCommand}"
-                                IsEnabled="{Binding CanManualControl}"/>
-                        <Button Content="↻ RETURN TO HOME" 
-                                Width="150" 
+                        <Button x:Name="ReturnHomeButton"
+                                Content="↻ RETURN TO HOME" 
+                                Style="{StaticResource PrimaryButtonStyle}"
+                                Height="40"
                                 Margin="0,0,5,5"
                                 Command="{Binding ReturnHomeCommand}"
-                            IsEnabled="{Binding CanAutomaticControl}"/>
-                        <Button Content="⚠️ RESET HOME" 
-                                Width="150" 
-                                Margin="0,0,5,5"
-                                Background="DarkOrange"
-                                Foreground="White"
-                                Command="{Binding ResetHomeCommand}"
-                                IsEnabled="{Binding CanManualControl}"/>
+                                IsEnabled="{Binding CanAutomaticControl}"/>
                     </WrapPanel>
                 </StackPanel>
             </Expander>
@@ -491,6 +519,8 @@
 
                     <!-- Align All Button -->
                     <Button Content="✓ ALIGN ALL" 
+                            Width="{Binding ActualWidth, ElementName=ReturnHomeButton}"
+                            HorizontalAlignment="Left"
                             Height="40"
                             Background="Green"
                             Foreground="White"
