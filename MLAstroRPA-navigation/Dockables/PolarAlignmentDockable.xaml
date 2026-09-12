@@ -213,7 +213,7 @@
             <StackPanel Margin="10">
 
             <!-- Disconnected notice (shown only when there is no serial connection) -->
-            <TextBlock Text="⚠️ Not connected&#10;&#10;Open the CONFIGURATION tab and connect to the MLAstro RPA hardware via serial port to start controlling."
+            <TextBlock Text="⚠️ Not connected&#10;&#10;Open the plugin CONNECTION tab and connect to the MLAstro RPA hardware (Serial or Wireless) to start controlling."
                        TextAlignment="Center"
                        TextWrapping="Wrap"
                        FontSize="14"

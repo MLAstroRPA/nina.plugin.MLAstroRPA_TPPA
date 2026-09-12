@@ -16,8 +16,17 @@
                               PreviewMouseWheel="OnScrollViewerPreviewMouseWheel">
                     <StackPanel Margin="10">
                     <Grid>
-                    <StackPanel Margin="10">
-                        <WrapPanel Margin="0,0,0,10">
+                    <StackPanel Margin="10">                        <!-- Kiểu kết nối: CHỈ chọn 1 trong 2 (Serial hoặc Wireless). -->
+                        <StackPanel Width="220" Margin="0,0,0,10" HorizontalAlignment="Left">
+                            <TextBlock Text="Connection type" Margin="0,0,0,5" />
+                            <ComboBox SelectedIndex="{Binding TransportModeIndex, Mode=TwoWay}">
+                                <ComboBoxItem Content="Serial connection" />
+                                <ComboBoxItem Content="Wireless connection" />
+                            </ComboBox>
+                        </StackPanel>
+
+                        <!-- ===== SERIAL SETTINGS (ẩn hoàn toàn khi chọn Wireless connection) ===== -->
+                        <StackPanel Visibility="{Binding IsSerialSettingsVisible, Converter={StaticResource BoolToVisConverter}}">                        <WrapPanel Margin="0,0,0,10">
                             <StackPanel Width="220" Margin="0,0,10,10">
                                 <TextBlock Text="COM Port" Margin="0,0,0,5" />
                                 <ComboBox ItemsSource="{Binding AvailableComPortItems}"
@@ -117,7 +126,106 @@
                                        Margin="8,0,0,0" />
                         </StackPanel>
 
-                        <TextBlock Text="Serial Terminal" Margin="0,0,0,5" />
+                        </StackPanel>
+
+                        <!-- ===== WIRELESS SETTINGS (WebSocket qua mDNS/IP) ===== -->
+                        <StackPanel Visibility="{Binding IsWirelessSettingsVisible, Converter={StaticResource BoolToVisConverter}}">
+                            <StackPanel Width="320" Margin="0,0,0,10" HorizontalAlignment="Left">
+                                <TextBlock Text="Address:" Margin="0,0,0,5" />
+                                <TextBox Text="{Binding Settings.MlaHost, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                <TextBlock Text="hostname (MLAstroRPA.local) or device IP"
+                                           Foreground="Gray"
+                                           FontSize="11"
+                                           Margin="0,4,0,0" />
+                            </StackPanel>
+
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                <TextBlock Text="Connection:"
+                                           VerticalAlignment="Center"
+                                           Margin="0,0,8,0"
+                                           FontSize="12" />
+                                <Button Content="{Binding SerialConnectButtonText}"
+                                        Width="110"
+                                        Margin="0,0,10,0"
+                                        Command="{Binding ToggleSerialConnectionCommand}" />
+                                <TextBlock Text="{Binding AutoReconnectStatus}"
+                                           VerticalAlignment="Center"
+                                           FontWeight="SemiBold"
+                                           Foreground="Blue" />
+                            </StackPanel>
+
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                <Button Content="Reboot device"
+                                        Width="110"
+                                        Margin="0,0,10,0"
+                                        Command="{Binding ResetEsp32Command}" />
+                            </StackPanel>
+
+                            <TextBlock Text="{Binding SerialConnectionStatus}"
+                                       TextWrapping="Wrap"
+                                       Foreground="Gray"
+                                       FontSize="11"
+                                       Margin="0,0,0,4" />
+
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                <TextBlock Text="Handshake: "
+                                           Foreground="Gray"
+                                           FontSize="11" />
+                                <TextBlock Text="{Binding SerialHandshakeStatus}"
+                                           Foreground="Gray"
+                                           FontSize="11" />
+                            </StackPanel>
+
+                            <TextBlock Text="System log:" Margin="0,0,0,5" />
+
+                            <!-- Nút giống Web UI: RESET ERROR / Export CSV / Clear -->
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <Button Content="⚠ RESET ERROR"
+                                        Width="120"
+                                        Margin="0,0,10,0"
+                                        Command="{Binding ResetErrorCommand}" />
+                                <Button Content="Export CSV"
+                                        Width="100"
+                                        Margin="0,0,10,0"
+                                        Command="{Binding ExportSystemLogCommand}" />
+                                <Button Content="Clear"
+                                        Width="80"
+                                        Command="{Binding ClearSystemLogCommand}" />
+                            </StackPanel>
+
+                            <!-- Bảng log giống Web UI: [thời gian] nội dung, tô màu theo mức độ,
+                                 dòng mới nhất lên trên, tối đa 50 dòng. Nền theo theme NINA
+                                 (không tint nền), cho phép bôi chọn + Copy qua context menu. -->
+                            <RichTextBox Height="180"
+                                         MinHeight="180"
+                                         IsReadOnly="True"
+                                         IsReadOnlyCaretVisible="True"
+                                         Background="Transparent"
+                                         FontFamily="Consolas"
+                                         VerticalScrollBarVisibility="Auto"
+                                         PreviewMouseWheel="OnSerialTerminalPreviewMouseWheel"
+                                         Loaded="OnSystemLogLoaded">
+                                <RichTextBox.ContextMenu>
+                                    <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}"
+                                                 Background="White"
+                                                 Foreground="White">
+                                        <MenuItem Header="Copy" Click="OnSerialTerminalCopyClick" />
+                                        <MenuItem Header="Clear" Command="{Binding ClearSystemLogCommand}" />
+                                    </ContextMenu>
+                                </RichTextBox.ContextMenu>
+                            </RichTextBox>
+
+                            <Thumb Height="8"
+                                   Margin="0,0,0,10"
+                                   HorizontalAlignment="Stretch"
+                                   Cursor="SizeNS"
+                                   Background="Transparent"
+                                   DragDelta="OnSerialTerminalResizeThumbDragDelta" />
+                        </StackPanel>
+
+                        <!-- ===== SERIAL TERMINAL (chỉ hiện khi chọn Serial connection) ===== -->
+                        <StackPanel Visibility="{Binding IsSerialSettingsVisible, Converter={StaticResource BoolToVisConverter}}">
+                            <TextBlock Text="Serial Terminal" Margin="0,0,0,5" />
                         <RichTextBox Height="180"
                                      MinHeight="180"
                                      IsReadOnly="True"
@@ -147,8 +255,9 @@
                                Cursor="SizeNS"
                                Background="Transparent"
                                DragDelta="OnSerialTerminalResizeThumbDragDelta" />
+                        </StackPanel>
 
-                        <DockPanel>
+                        <DockPanel Visibility="{Binding IsSerialSettingsVisible, Converter={StaticResource BoolToVisConverter}}">
                             <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
                                 <CheckBox IsChecked="{Binding IsHexInputEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                           VerticalAlignment="Center"
@@ -178,7 +287,7 @@
                       Loaded="OnOptionsScrollViewerLoaded"
                       PreviewMouseWheel="OnScrollViewerPreviewMouseWheel">
                     <StackPanel Margin="10">
-                <TextBlock Text="⚠️ Not connected&#10;&#10;Open the CONNECTION tab and connect to the MLAstro RPA hardware via serial port to configure device settings."
+                <TextBlock Text="⚠️ Not connected&#10;&#10;Open the CONNECTION tab and connect to the MLAstro RPA hardware (Serial or Wireless) to configure device settings."
                            TextAlignment="Center"
                            TextWrapping="Wrap"
                            FontSize="14"

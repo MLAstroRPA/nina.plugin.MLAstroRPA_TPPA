@@ -9,6 +9,16 @@ using MLAstro_Robotic_Polar_Alignment.Dockables;
 
 namespace MLAstro_Robotic_Polar_Alignment.Settings
 {
+    /// <summary>Kiểu kết nối tới MLAstroRPA.</summary>
+    public enum MlastroTransportMode
+    {
+        /// <summary>Kết nối qua cổng COM (USB Serial) - mặc định, giữ nguyên hành vi cũ.</summary>
+        Serial = 0,
+
+        /// <summary>Kết nối qua WebSocket (mDNS "MLAstroRPA.local" hoặc IP).</summary>
+        Wireless = 1
+    }
+
     [Export]
     [PartCreationPolicy(CreationPolicy.Shared)]
     public class PluginSettings : INotifyPropertyChanged
@@ -80,6 +90,53 @@ namespace MLAstro_Robotic_Polar_Alignment.Settings
         public string ComPort
         {
             get => GetString(nameof(ComPort), "COM1");
+            set => SetString(value);
+        }
+
+        /// <summary>
+        /// Kiểu kết nối tới MLAstroRPA: Serial (cổng COM) hoặc Wireless (WebSocket qua mDNS/IP).
+        /// Chỉ chọn 1 trong 2 - mỗi lúc chỉ có 1 transport giữ quyền điều khiển.
+        /// </summary>
+        public MlastroTransportMode TransportMode
+        {
+            get
+            {
+                var value = _optionsAccessor.GetValueString(nameof(TransportMode), MlastroTransportMode.Serial.ToString());
+                return Enum.TryParse<MlastroTransportMode>(value, true, out var mode) ? mode : MlastroTransportMode.Serial;
+            }
+            set
+            {
+                var current = TransportMode;
+                _optionsAccessor.SetValueString(nameof(TransportMode), value.ToString());
+                OnPropertyChanged();
+                if (current != value)
+                {
+                    TransportModeChanged?.Invoke(this, value);
+                }
+            }
+        }
+
+        public static event EventHandler<MlastroTransportMode>? TransportModeChanged;
+
+        /// <summary>
+        /// Địa chỉ thiết bị ở chế độ Wireless: hostname mDNS (mặc định "MLAstroRPA.local")
+        /// hoặc IP trực tiếp (vd "192.168.4.1") khi mDNS không hoạt động.
+        /// </summary>
+        public string MlaHost
+        {
+            get => GetString(nameof(MlaHost), "MLAstroRPA.local");
+            set => SetString(value);
+        }
+
+        public int MlaPort
+        {
+            get => GetInt(nameof(MlaPort), 80);
+            set => SetInt(value);
+        }
+
+        public string MlaPath
+        {
+            get => GetString(nameof(MlaPath), "/ws");
             set => SetString(value);
         }
 

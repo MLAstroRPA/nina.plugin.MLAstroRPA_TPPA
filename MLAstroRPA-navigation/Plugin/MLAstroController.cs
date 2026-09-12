@@ -47,6 +47,10 @@ namespace MLAstro_Robotic_Polar_Alignment.Plugin
         private bool _apPasswordEdited;
         private bool _staPasswordEdited;
 
+        // Transport WIRELESS (WebSocket) - tạo cùng lúc với controller, dùng chung singleton
+        // MlastroWebSocketService.Instance cho cả UI và driver TPPA (firmware chỉ cho 1 PC WS).
+        private readonly MlastroWebSocketService _webSocketService;
+
         public PluginSettings Settings { get; }
 
         public PolarAlignmentDockVM PolarAlignmentVM => _polarAlignmentDockVM;
@@ -85,16 +89,79 @@ namespace MLAstro_Robotic_Polar_Alignment.Plugin
             }
         }
 
-        public string SerialConnectionStatus => _serialConnectionService.ConnectionStatus;
+        public string SerialConnectionStatus => IsWirelessTransport
+            ? (string.IsNullOrWhiteSpace(_webSocketService.ConnectionStatus) ? "Disconnected" : _webSocketService.ConnectionStatus)
+            : _serialConnectionService.ConnectionStatus;
 
-        public string SerialHandshakeStatus => _serialConnectionService.HandshakeStatus;
+        public string SerialHandshakeStatus => IsWirelessTransport
+            ? _webSocketService.HandshakeStatus
+            : _serialConnectionService.HandshakeStatus;
 
-        public bool IsSerialConnected => _serialConnectionService.IsConnected;
+        public bool IsSerialConnected => _serialConnectionService.IsConnected || _webSocketService.IsConnected;
 
         /// <summary>TPPA đang giữ quyền điều khiển -> khoá tab CONFIGURATION.</summary>
-        public bool IsExternalLocked => _serialConnectionService.IsExternalControlActive;
+        public bool IsExternalLocked => _serialConnectionService.IsExternalControlActive
+                                        || (_webSocketService.IsConnected && _webSocketService.IsExternalControlActive);
 
         public bool IsExternalUnlocked => !IsExternalLocked;
+
+        // ===== Chọn kiểu kết nối: Serial / Wireless =====
+        public bool IsWirelessTransport => Settings.TransportMode == MlastroTransportMode.Wireless;
+
+        public bool IsSerialTransport => !IsWirelessTransport;
+
+        /// <summary>Hiện khối cài đặt Serial (COM port, data bits...) chỉ khi chọn Serial connection.</summary>
+        public bool IsSerialSettingsVisible => IsSerialTransport;
+
+        /// <summary>Hiện bảng Wireless (Địa chỉ / Kết nối / System log) chỉ khi chọn Wireless connection.</summary>
+        public bool IsWirelessSettingsVisible => IsWirelessTransport;
+
+        /// <summary>0 = Serial connection, 1 = Wireless connection (binding cho ComboBox ở tab CONNECTION).</summary>
+        public int TransportModeIndex
+        {
+            get => IsWirelessTransport ? 1 : 0;
+            set
+            {
+                var mode = value == 1 ? MlastroTransportMode.Wireless : MlastroTransportMode.Serial;
+                if (Settings.TransportMode == mode)
+                {
+                    return;
+                }
+
+                // Đổi transport khi đang kết nối → ngắt transport cũ trước (mỗi lúc chỉ 1 transport giữ quyền).
+                if (_serialConnectionService.IsConnected)
+                {
+                    _serialConnectionService.Disconnect();
+                }
+                if (_webSocketService.IsConnected)
+                {
+                    _webSocketService.Disconnect();
+                }
+
+                Settings.TransportMode = mode;
+                RaiseTransportProperties();
+            }
+        }
+
+        private void RaiseTransportProperties()
+        {
+            OnPropertyChanged(nameof(IsWirelessTransport));
+            OnPropertyChanged(nameof(IsSerialTransport));
+            OnPropertyChanged(nameof(IsSerialSettingsVisible));
+            OnPropertyChanged(nameof(IsWirelessSettingsVisible));
+            OnPropertyChanged(nameof(TransportModeIndex));
+            RaiseConnectionProperties();
+        }
+
+        private void RaiseConnectionProperties()
+        {
+            OnPropertyChanged(nameof(IsSerialConnected));
+            OnPropertyChanged(nameof(SerialConnectionStatus));
+            OnPropertyChanged(nameof(SerialHandshakeStatus));
+            OnPropertyChanged(nameof(SerialConnectButtonText));
+            OnPropertyChanged(nameof(IsExternalLocked));
+            OnPropertyChanged(nameof(IsExternalUnlocked));
+        }
 
         public string SerialConnectButtonText => IsSerialConnected ? "Disconnect" : "Connect";
 
@@ -112,6 +179,12 @@ namespace MLAstro_Robotic_Polar_Alignment.Plugin
         }
 
         public ObservableCollection<SerialTerminalEntry> SerialTerminalEntries => _serialConnectionService.TerminalEntries;
+
+        /// <summary>
+        /// System log kiểu Web UI (dùng ở chế độ Wireless): [thời gian] + nội dung, tô màu theo mức độ,
+        /// dòng mới nhất lên trên, tối đa 50 dòng, KHÔNG có frame TX/RX thô.
+        /// </summary>
+        public ObservableCollection<SystemLogEntry> SystemLog => _webSocketService.SystemLog;
 
         public bool IsHexInputEnabled
         {
@@ -310,11 +383,18 @@ namespace MLAstro_Robotic_Polar_Alignment.Plugin
 
         public ICommand ToggleShowStaPasswordCommand { get; }
 
+        public ICommand ClearSystemLogCommand { get; }
+
+        public ICommand ExportSystemLogCommand { get; }
+
+        public ICommand ResetErrorCommand { get; }
+
         public MLAstroController(PluginSettings settings, SerialConnectionService serialConnectionService, PolarAlignmentDockVM polarAlignmentDockVM)
         {
             Settings = settings;
             _serialConnectionService = serialConnectionService;
             _polarAlignmentDockVM = polarAlignmentDockVM;
+            _webSocketService = new MlastroWebSocketService(settings, serialConnectionService);
 
             RefreshComPortsCommand = new RelayCommand(RefreshComPorts);
             ToggleSerialConnectionCommand = new RelayCommand(ToggleSerialConnection);
@@ -326,6 +406,9 @@ namespace MLAstro_Robotic_Polar_Alignment.Plugin
             ResetEsp32Command = new RelayCommand(ResetEsp32);
             ToggleShowApPasswordCommand = new RelayCommand(ToggleShowApPassword);
             ToggleShowStaPasswordCommand = new RelayCommand(ToggleShowStaPassword);
+            ClearSystemLogCommand = new RelayCommand(_webSocketService.ClearSystemLog);
+            ExportSystemLogCommand = new RelayCommand(ExportSystemLog);
+            ResetErrorCommand = new RelayCommand(ResetError);
 
             Settings.PropertyChanged += OnSettingsPropertyChanged;
             _serialConnectionService.PropertyChanged += OnSerialConnectionServicePropertyChanged;
@@ -338,6 +421,18 @@ namespace MLAstro_Robotic_Polar_Alignment.Plugin
             // Theo dõi PauseQueryGlobal đổi (TPPA mượn/trả cổng hay gạt tay) để checkbox hiện đúng trạng thái.
             _onPauseQueryChanged = paused => OnPropertyChanged(nameof(IsPauseQuery));
             SerialConnectionService.PauseQueryChanged += _onPauseQueryChanged;
+
+            // Transport wireless đổi trạng thái ở luồng nền → marshal về UI thread trước khi báo binding.
+            _webSocketService.PropertyChanged += (_, __) =>
+            {
+                try
+                {
+                    var dispatcher = Application.Current?.Dispatcher;
+                    if (dispatcher != null) dispatcher.Invoke(RaiseConnectionProperties);
+                    else RaiseConnectionProperties();
+                }
+                catch { }
+            };
             RefreshComPorts();
 
             // Hook into application exit to ensure cleanup - must run on UI thread
@@ -594,6 +689,20 @@ namespace MLAstro_Robotic_Polar_Alignment.Plugin
 
         private async void ToggleSerialConnection()
         {
+            if (IsWirelessTransport)
+            {
+                if (_webSocketService.IsConnected)
+                {
+                    _webSocketService.Disconnect();
+                }
+                else
+                {
+                    await _webSocketService.ConnectAsync();
+                }
+                RaiseConnectionProperties();
+                return;
+            }
+
             if (IsSerialConnected)
             {
                 _serialConnectionService.Disconnect();
@@ -607,6 +716,17 @@ namespace MLAstro_Robotic_Polar_Alignment.Plugin
         private void SendSerial()
         {
             var input = SerialTerminalInput;
+
+            if (IsWirelessTransport)
+            {
+                var line = input.EndsWith('\n') ? input : input + "\n";
+                if (_webSocketService.Send(line))
+                {
+                    SerialTerminalInput = string.Empty;
+                }
+                return;
+            }
+
             var sent = IsHexInputEnabled
                 ? _serialConnectionService.SendHex(input)
                 : _serialConnectionService.Send(input.EndsWith('\n') ? input : input + "\n");
@@ -642,8 +762,58 @@ namespace MLAstro_Robotic_Polar_Alignment.Plugin
             _serialConnectionService.ClearTerminal();
         }
 
+        /// <summary>Xuất System log ra file CSV (giống nút Export CSV của Web UI).</summary>
+        private void ExportSystemLog()
+        {
+            try
+            {
+                var dialog = new Microsoft.Win32.SaveFileDialog
+                {
+                    Title = "Export System log",
+                    FileName = $"MLAstroRPA-systemlog-{DateTime.Now:yyyyMMdd-HHmmss}.csv",
+                    Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*"
+                };
+
+                if (dialog.ShowDialog() != true)
+                {
+                    return;
+                }
+
+                File.WriteAllText(dialog.FileName, _webSocketService.BuildSystemLogCsv());
+                Logger.Info($"[MLAstro] System log exported to {dialog.FileName}");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"[MLAstro] Export system log failed: {ex.Message}");
+            }
+        }
+
+        /// <summary>Gửi ReER:1 (resetError) — dùng chung facade nên chạy được cả Serial lẫn Wireless.</summary>
+        private void ResetError()
+        {
+            if (!IsSerialConnected)
+            {
+                return;
+            }
+
+            if (!_serialConnectionService.Send("ReER:1\n"))
+            {
+                Logger.Warning("[MLAstro] Reset error command failed");
+            }
+        }
+
         private async void ResetEsp32()
         {
+            if (IsWirelessTransport)
+            {
+                if (!_webSocketService.ResetEsp32())
+                {
+                    return;
+                }
+                await AutoReconnectAsync(3);
+                return;
+            }
+
             if (!_serialConnectionService.ResetEsp32())
             {
                 return;
@@ -656,6 +826,29 @@ namespace MLAstro_Robotic_Polar_Alignment.Plugin
         {
             if (!IsSerialConnected)
             {
+                return;
+            }
+
+            // ---- WIRELESS: lưu cấu hình qua WebSocket API (saveConfig + reboot) ----
+            // Lưu ý: SSID/Ip/Subnet của AP và SSID/Password của STA chỉ gửi được qua Serial.
+            if (IsWirelessTransport)
+            {
+                try
+                {
+                    var wirelessConfig = _serialConnectionService.BuildConfigurationCommand(Settings);
+                    var ok = await _webSocketService.SendCommandAndAwaitOkAsync(wirelessConfig);
+                    if (!ok)
+                    {
+                        Logger.Warning("[MLAstro] saveConfig was not acknowledged over wireless");
+                    }
+
+                    _webSocketService.Disconnect();
+                    await AutoReconnectAsync(3);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error($"[MLAstro] Save settings (wireless) failed: {ex.Message}");
+                }
                 return;
             }
 
@@ -709,6 +902,20 @@ namespace MLAstro_Robotic_Polar_Alignment.Plugin
                 return;
             }
 
+            if (IsWirelessTransport)
+            {
+                var wirelessConfig = _serialConnectionService.BuildConfigurationCommand(Settings, includeSaveAndReboot: false);
+                _ = _webSocketService.SendCommandAndAwaitOkAsync(wirelessConfig).ContinueWith(t =>
+                {
+                    if (t.Result)
+                    {
+                        Logger.Info("[MLAstro] Settings applied to device memory (wireless)");
+                    }
+                });
+                ResumeSettingsSync();
+                return;
+            }
+
             var configCommand = _serialConnectionService.BuildConfigurationCommand(Settings, includeSaveAndReboot: false);
             var sent = _serialConnectionService.Send(configCommand);
             if (sent)
@@ -737,6 +944,35 @@ namespace MLAstro_Robotic_Polar_Alignment.Plugin
         {
             try
             {
+                // ---- WIRELESS: không có COM port để liệt kê lại, chỉ kết nối lại WebSocket ----
+                if (IsWirelessTransport)
+                {
+                    for (int i = countdownSeconds; i > 0; i--)
+                    {
+                        AutoReconnectStatus = $"Reconnecting in {i}s...";
+                        await System.Threading.Tasks.Task.Delay(1000);
+                    }
+
+                    for (int attempt = 0; attempt < 10; attempt++)
+                    {
+                        AutoReconnectStatus = $"Connecting... (attempt {attempt + 1}/10)";
+                        if (await _webSocketService.ConnectAsync())
+                        {
+                            AutoReconnectStatus = "Connected";
+                            await System.Threading.Tasks.Task.Delay(2000);
+                            AutoReconnectStatus = string.Empty;
+                            RaiseConnectionProperties();
+                            return;
+                        }
+
+                        await System.Threading.Tasks.Task.Delay(1000);
+                    }
+
+                    AutoReconnectStatus = string.Empty;
+                    ShowConnectionError();
+                    return;
+                }
+
                 // Countdown before first reconnect attempt (firmware needs time to reboot)
                 for (int i = countdownSeconds; i > 0; i--)
                 {

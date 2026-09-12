@@ -185,10 +185,9 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
 
         /// <summary>Tạm dừng poll "?" của MLAstro khi plugin ngoài (TPPA) đang chủ động điều khiển.</summary>
         public void SetExternalPauseQuery(bool pause) => PauseQueryGlobal = pause;
-
         /// <summary>Đang có plugin ngoài (TPPA) GIỮ quyền điều khiển -&gt; MLAstro khoá UI (trừ STOP/E-STOP + CONNECTION).</summary>
         public bool IsExternalControlActive {
-            get { lock (_externalLock) return _externalControlActive; }
+            get { lock (_externalLock) return _externalControlActive || (_wirelessProxy?.IsExternalControlActive == true); }
         }
 
         // --- Kênh STOP / trả quyền (giữa MLAstro và plugin ngoài TPPA) ---
@@ -225,6 +224,8 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
         {
             Logger.Info($"[MLAstro] NotifyExternalStop: {reason}");
             RaiseExternalStop(reason);
+            // Wireless: báo cho phiên WebSocket (driver TPPA dùng chung service này qua proxy).
+            try { _wirelessProxy?.NotifyExternalStop(reason); } catch { }
         }
 
         /// <summary>
@@ -233,6 +234,16 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
         /// </summary>
         public async Task<bool> BeginExternalControlAsync()
         {
+            // Wireless: mở phiên WebSocket nếu chưa có rồi đánh dấu external control trên proxy.
+            if (WirelessActive)
+            {
+                var okWireless = await _wirelessProxy!.BeginExternalControlAsync().ConfigureAwait(false);
+                if (!okWireless) return false;
+                lock (_externalLock) _externalControlActive = true;
+                RaiseExternalControl(true);
+                return true;
+            }
+
             var ok = await EnsureExternalConnectedAsync().ConfigureAwait(false);
             if (!ok) return false;
             lock (_externalLock) _externalControlActive = true;
@@ -255,6 +266,8 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
                     RaiseExternalControl(false);
                 }
             }
+            // Trả quyền trên transport wireless (nếu có) để phiên WS trở lại trạng thái monitor.
+            try { _wirelessProxy?.EndExternalControl(); } catch { }
             // Luôn nhả cờ tạm dừng poll toàn cục, kể cả khi cờ active đã bị Disconnect() xoá từ trước.
             // Nếu không, PauseQueryGlobal kẹt true vĩnh viễn -> MLAstro ngừng poll "?" cho tới khi có
             // chu kỳ mượn mới hoặc gạt tay tắt pause.
@@ -390,7 +403,66 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
             }
         }
 
-        public bool IsConnected => _serialPort?.IsOpen == true;
+        public bool IsConnected => _serialPort?.IsOpen == true || WirelessActive;
+
+        // ==================================================================
+        // FACADE cho transport WIRELESS (WebSocket)
+        // Khi có proxy đang kết nối, service này đóng vai "cổng vào duy nhất" cho UI/dock/controller:
+        // trạng thái, gửi lệnh và external-control đều đi qua WebSocket, còn cổng COM không mở.
+        // (Mỗi lúc chỉ 1 transport hoạt động - do người dùng chọn ở tab CONNECTION.)
+        // ==================================================================
+        private MlastroWebSocketService? _wirelessProxy;
+
+        public MlastroWebSocketService? WirelessProxy
+        {
+            get => _wirelessProxy;
+            set
+            {
+                if (ReferenceEquals(_wirelessProxy, value))
+                {
+                    return;
+                }
+
+                if (_wirelessProxy != null)
+                {
+                    _wirelessProxy.PropertyChanged -= OnWirelessProxyPropertyChanged;
+                }
+
+                _wirelessProxy = value;
+
+                if (_wirelessProxy != null)
+                {
+                    _wirelessProxy.PropertyChanged += OnWirelessProxyPropertyChanged;
+                }
+
+                OnPropertyChanged(nameof(IsConnected));
+                OnPropertyChanged(nameof(ConnectionStatus));
+                OnPropertyChanged(nameof(HandshakeStatus));
+            }
+        }
+
+        private bool WirelessActive => _wirelessProxy?.IsConnected == true;
+
+        private void OnWirelessProxyPropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            // Cho dock/controller thấy đúng trạng thái kết nối khi đang dùng transport wireless.
+            OnPropertyChanged(nameof(IsConnected));
+            OnPropertyChanged(nameof(ConnectionStatus));
+            OnPropertyChanged(nameof(HandshakeStatus));
+            OnPropertyChanged(nameof(FirmwareVersion));
+            InvokeOnUiThread(() => RaiseExternalState(IsConnected));
+        }
+
+        /// <summary>Transport wireless: cập nhật firmware version nhận được từ handshake/init snapshot.</summary>
+        public void SetWirelessFirmwareVersion(string version)
+        {
+            if (string.IsNullOrWhiteSpace(version))
+            {
+                return;
+            }
+
+            FirmwareVersion = version;
+        }
 
         public bool HexDisplay
         {
@@ -453,7 +525,7 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
 
         public string ConnectionStatus
         {
-            get => _connectionStatus;
+            get => WirelessActive ? _wirelessProxy!.ConnectionStatus : _connectionStatus;
             private set
             {
                 _connectionStatus = value;
@@ -463,7 +535,7 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
 
         public string HandshakeStatus
         {
-            get => _handshakeStatus;
+            get => WirelessActive ? _wirelessProxy!.HandshakeStatus : _handshakeStatus;
             private set
             {
                 if (_handshakeStatus == value)
@@ -864,6 +936,19 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
 
         public void Disconnect()
         {
+            // Transport wireless đang hoạt động → nhả quyền + đóng WebSocket (không đụng cổng COM).
+            if (WirelessActive)
+            {
+                try { _wirelessProxy!.Disconnect(); } catch { }
+                ConnectionStatus = "Disconnected";
+                HandshakeStatus = string.Empty;
+                AppendTerminalEntry(SerialTerminalEntry.Disconnected("Disconnected: wireless"));
+                OnPropertyChanged(nameof(IsConnected));
+                RaiseExternalState(false);
+                Logger.Info("[MLAstro] Wireless disconnected (proxy).");
+                return;
+            }
+
             _connectionCheckFailures = 0;
 
             // Nếu có plugin ngoài (TPPA) đang GIỮ quyền: báo dừng PA + trả quyền về UI trước khi đóng cổng.
@@ -917,6 +1002,11 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
 
         public bool ResetEsp32()
         {
+            if (WirelessActive)
+            {
+                return _wirelessProxy!.ResetEsp32();
+            }
+
             if (_serialPort?.IsOpen != true)
             {
                 ConnectionStatus = "Not connected";
@@ -948,6 +1038,12 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
 
         public bool Send(string text)
         {
+            // Transport wireless: dịch lệnh text sang JSON và gửi qua WebSocket.
+            if (WirelessActive)
+            {
+                return _wirelessProxy!.Send(text);
+            }
+
             if (!IsConnected)
             {
                 ConnectionStatus = "Not connected";
@@ -991,6 +1087,12 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
             if (PauseQueryGlobal)
             {
                 return false;
+            }
+
+            // Wireless: firmware tự đẩy telemetry ~250 ms, không cần poll "?".
+            if (WirelessActive)
+            {
+                return true;
             }
 
             return Send("?\n");
@@ -1255,6 +1357,15 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
         /// </summary>
         private void ProcessErrorTelemetry(string line)
         {
+            // BẮT BUỘC đúng dòng ERROR telemetry của firmware ("ERROR:Code:value,Code:value,...").
+            // Hàm này còn được gọi từ InjectIncomingText (transport wireless); nếu không kiểm tra prefix
+            // thì dòng telemetry thường dạng <STATUS|Mpos:x,y|>WSta:1,Home:1,AzRM:1,... sẽ bị parse
+            // thành mã lỗi và sinh ra các WARNING giả trong Alarm History (WSta/Home/AzRM/AlRM/Back).
+            if (string.IsNullOrWhiteSpace(line) || !line.StartsWith("ERROR:", StringComparison.Ordinal))
+            {
+                return;
+            }
+
             try
             {
                 var dict = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -1301,16 +1412,38 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
         }
 
         /// <summary>
+        /// Xoá trạng thái lỗi cũ khi bắt đầu phiên mới (transport wireless không nhận được dòng
+        /// ERROR: của firmware như đường serial, nên cần chủ động đưa về trạng thái sạch).
+        /// </summary>
+        public void ResetErrorStateForNewSession()
+        {
+            ErrorState = DriverErrorState.Clean;
+            InvokeOnUiThread(() => ErrorStateChanged?.Invoke(this, ErrorState));
+        }
+
+        /// <summary>
         /// Sends the handshake sequence and waits for the expected response.
         /// Used by auto-reconnect so the handshake can be retried until the firmware is ready.
         /// </summary>
         public async Task<bool> SendHandshakeAsync()
         {
+            // Wireless: handshake (MLAstroRPA-TC) đã được thực hiện bằng JSON ngay khi kết nối WebSocket.
+            if (WirelessActive)
+            {
+                return _wirelessProxy!.HandshakeStatus == "OK!";
+            }
+
             return await SendAndAwaitOkAsync(InitialHandshakeCommand).ConfigureAwait(false);
         }
 
         public async Task<bool> SendCommandAndAwaitOkAsync(string text)
         {
+            // Wireless: dịch chuỗi cấu hình text sang saveConfig/applyConfig và chờ xác nhận của thiết bị.
+            if (WirelessActive)
+            {
+                return await _wirelessProxy!.SendCommandAndAwaitOkAsync(text).ConfigureAwait(false);
+            }
+
             return await SendAndAwaitOkAsync(text).ConfigureAwait(false);
         }
 
@@ -1664,6 +1797,42 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
             {
                 Logger.Warning($"[MLAstro] WiFi password response parsing failed: {ex.Message}");
             }
+        }
+
+        // =====================================================================
+        // Transport WIRELESS (WebSocket)
+        // Dữ liệu nhận từ WebSocket được tổng hợp lại thành ĐÚNG định dạng text của firmware
+        // serial rồi bơm vào CÙNG pipeline xử lý ở đây. Nhờ vậy TelemetryParser,
+        // TelemetryDataReceived, CompletionReceived, ErrorStateChanged và toàn bộ UI
+        // (CONTROL + CONFIGURATION) hoạt động y như khi dùng cổng COM.
+        // =====================================================================
+
+        /// <summary>Bơm một dòng text đã tổng hợp từ WebSocket (telemetry / ok / ERROR: / COMPLETED).</summary>
+        public void InjectIncomingText(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return;
+            }
+
+            try { ProcessTelemetryData(text); }
+            catch (Exception ex) { Logger.Warning($"[MLAstro][WS] Telemetry inject failed: {ex.Message}"); }
+
+            // Chỉ dòng ERROR: của firmware mới là mã lỗi (ProcessErrorTelemetry cũng tự bảo vệ).
+            if (text.StartsWith("ERROR:", StringComparison.Ordinal))
+            {
+                try { ProcessErrorTelemetry(text); }
+                catch { }
+            }
+
+            try { CheckForCompletionEvents(text); }
+            catch { }
+
+            try { ProcessWifiPasswordResponses(text); }
+            catch { }
+
+            try { RaiseExternalLine(text.TrimEnd('\r', '\n')); }
+            catch { }
         }
 
         private void CheckForCompletionEvents(string receivedText)

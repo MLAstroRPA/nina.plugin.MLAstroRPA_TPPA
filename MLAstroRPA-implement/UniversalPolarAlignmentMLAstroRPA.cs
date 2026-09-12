@@ -25,6 +25,34 @@ namespace NINA.Plugins.PolarAlignment.MLAstroRPA {
         }
 
         private bool TryOpenPreferred() {
+            // ---- Chế độ WIRELESS: dùng chung phiên WebSocket với plugin MLAstro ----
+            var transportMode = MLAstro_Robotic_Polar_Alignment.Settings.PluginSettings.Instance?.TransportMode
+                                ?? MLAstro_Robotic_Polar_Alignment.Settings.MlastroTransportMode.Serial;
+            if (transportMode == MLAstro_Robotic_Polar_Alignment.Settings.MlastroTransportMode.Wireless) {
+                try {
+                    var wireless = MLAstro_Robotic_Polar_Alignment.Services.MlastroWebSocketService.Instance;
+                    if (wireless == null) {
+                        Logger.Error("[MLAstroRPA] Wireless transport selected but WebSocket service is not initialised (open the plugin Options page once).");
+                        port = null;
+                        OpenAndValidate();
+                        return port != null;
+                    }
+
+                    var wirelessSerial = new MlastroWirelessSerial(wireless);
+                    wirelessSerial.StopRequested += reason => OnExternalStop();
+                    wirelessSerial.Open();
+                    AttachPort(wirelessSerial);
+                    UpdateStatus();
+                    Logger.Info($"[MLAstroRPA] Connected via wireless (WebSocket) to {wireless.ConfiguredAddress}");
+                    return true;
+                } catch (Exception ex) {
+                    Logger.Error($"[MLAstroRPA] Wireless connect failed: {ex.Message}");
+                    port = null;
+                    OpenAndValidate();
+                    return port != null;
+                }
+            }
+
             MLAstroLink link;
             try { link = MLAstroLink.TryCreate(); } catch { link = null; }
 
@@ -560,11 +588,11 @@ namespace NINA.Plugins.PolarAlignment.MLAstroRPA {
         // so interface dispatch reaches this implementation instead of the inherited base one.
         void IDisposable.Dispose() {
             try {
-                // Khi dùng CHUNG cổng với MLAstro (SharedMlastroSerial): KHÔNG gửi "Disconnect"
-                // cho firmware - MLAstro vẫn là chủ và còn điều khiển thiết bị. Nếu gửi Disconnect,
-                // firmware nhả handshake nên lần mở lại qua MLAstro sẽ không điều khiển được.
+                // Khi dùng CHUNG cổng với MLAstro (SharedMlastroSerial) hoặc transport wireless
+                // (MlastroWirelessSerial): KHÔNG gửi "Disconnect" — MLAstro vẫn là chủ phiên và còn
+                // điều khiển thiết bị; gửi Disconnect sẽ nhả handshake khiến lần mở lại không điều khiển được.
                 // Chỉ gửi "Disconnect" khi TPPA TỰ mở cổng (fallback, không có MLAstro plugin).
-                if (Port?.IsOpen == true && !(Port is SharedMlastroSerial)) {
+                if (Port?.IsOpen == true && !(Port is SharedMlastroSerial) && !(Port is MlastroWirelessSerial)) {
                     Logger.Info("[MLAstroRPA] Sending Disconnect command to firmware");
                     Port.WriteLine("Disconnect");
                     // Give the firmware a moment to stop motors and release the handshake

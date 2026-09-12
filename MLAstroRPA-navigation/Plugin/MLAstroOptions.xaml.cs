@@ -269,6 +269,236 @@ namespace MLAstro_Robotic_Polar_Alignment.Plugin
             richTextBox.Height = Math.Max(180, newHeight);
         }
 
+        // ===== SYSTEM LOG (Wireless) — bảng log kiểu Web UI =====
+        // Dùng RichTextBox (không phải ListBox) để bôi chọn + Copy được nội dung log,
+        // nền theo theme NINA (Background=Transparent), và kéo dãn chiều cao bằng Thumb
+        // (dùng lại OnSerialTerminalResizeThumbDragDelta: nó tìm RichTextBox trong cùng panel).
+        private sealed class SystemLogBinding
+        {
+            public System.Collections.ObjectModel.ObservableCollection<MLAstro_Robotic_Polar_Alignment.Dockables.SystemLogEntry> Source = null!;
+            public System.Collections.Specialized.NotifyCollectionChangedEventHandler Handler = null!;
+        }
+
+        private void OnSystemLogLoaded(object sender, RoutedEventArgs e)
+        {
+            if (sender is not RichTextBox richTextBox || richTextBox.DataContext is not MLAstroController controller)
+            {
+                return;
+            }
+
+            // DataTemplate có thể load lại (đổi tab) → gỡ đăng ký cũ trước khi đăng ký mới.
+            if (richTextBox.Tag is SystemLogBinding previous)
+            {
+                previous.Source.CollectionChanged -= previous.Handler;
+                richTextBox.Tag = null;
+            }
+
+            var binding = new SystemLogBinding { Source = controller.SystemLog };
+            binding.Handler = (_, args) => SyncSystemLog(richTextBox, binding.Source, args);
+            binding.Source.CollectionChanged += binding.Handler;
+            richTextBox.Tag = binding;
+
+            richTextBox.Unloaded += (_, _) =>
+            {
+                binding.Source.CollectionChanged -= binding.Handler;
+            };
+
+            RebuildSystemLog(richTextBox, binding.Source);
+        }
+
+        /// <summary>
+        /// Đồng bộ document với collection: dòng mới được CHÈN LÊN ĐẦU (không dựng lại toàn bộ)
+        /// để không làm mất vùng bôi chọn khi người dùng đang copy log.
+        /// </summary>
+        private static void SyncSystemLog(RichTextBox richTextBox,
+                                          System.Collections.ObjectModel.ObservableCollection<MLAstro_Robotic_Polar_Alignment.Dockables.SystemLogEntry> entries,
+                                          System.Collections.Specialized.NotifyCollectionChangedEventArgs args)
+        {
+            if (richTextBox == null || entries == null)
+            {
+                return;
+            }
+
+            try
+            {
+                if (args.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Add
+                    && args.NewItems != null && args.NewItems.Count == 1 && args.NewStartingIndex == 0)
+                {
+                    var paragraph = CreateSystemLogParagraph((MLAstro_Robotic_Polar_Alignment.Dockables.SystemLogEntry)args.NewItems[0]!, IsDarkBackground(richTextBox));
+                    var first = richTextBox.Document.Blocks.FirstBlock;
+                    if (first == null)
+                    {
+                        richTextBox.Document.Blocks.Add(paragraph);
+                    }
+                    else
+                    {
+                        richTextBox.Document.Blocks.InsertBefore(first, paragraph);
+                    }
+
+                    // Cắt bớt khi vượt giới hạn (collection tự trim ở cuối → xoá block cuối).
+                    while (richTextBox.Document.Blocks.Count > entries.Count)
+                    {
+                        var last = richTextBox.Document.Blocks.LastBlock;
+                        if (last == null)
+                        {
+                            break;
+                        }
+                        richTextBox.Document.Blocks.Remove(last);
+                    }
+                    return;
+                }
+
+                if (args.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Remove)
+                {
+                    var last = richTextBox.Document.Blocks.LastBlock;
+                    if (last != null)
+                    {
+                        richTextBox.Document.Blocks.Remove(last);
+                    }
+                    return;
+                }
+
+                RebuildSystemLog(richTextBox, entries);
+            }
+            catch (Exception ex)
+            {
+                NINA.Core.Utility.Logger.Warning($"[MLAstro] System log render failed: {ex.Message}");
+            }
+        }
+
+        private static void RebuildSystemLog(RichTextBox richTextBox,
+                                             System.Collections.Generic.IEnumerable<MLAstro_Robotic_Polar_Alignment.Dockables.SystemLogEntry> entries)
+        {
+            var document = new System.Windows.Documents.FlowDocument
+            {
+                FontFamily = new System.Windows.Media.FontFamily("Consolas"),
+                PagePadding = new Thickness(2)
+            };
+
+            // Chọn bảng màu theo nền thực tế của panel log (theme sáng hay tối) để chữ luôn tương phản.
+            var darkBackground = IsDarkBackground(richTextBox);
+
+            if (entries != null)
+            {
+                foreach (var entry in entries)
+                {
+                    document.Blocks.Add(CreateSystemLogParagraph(entry, darkBackground));
+                }
+            }
+
+            richTextBox.Document = document;
+            richTextBox.ScrollToHome();
+        }
+
+        /// <summary>
+        /// Một dòng log = nhiều Run: nội dung thường (màu theo mức + đậm theo mức) và cụm
+        /// "(Backlash applied)" tô CAM ĐẬM — giống span.log-backlash của Web UI.
+        /// Web UI nhấn đúng cụm đó và nếu chuỗi chỉ có "Backlash applied" thì BỌC THÊM ngoặc,
+        /// nên ở đây làm y hệt để nội dung hiển thị khớp web.
+        /// </summary>
+        private static System.Windows.Documents.Paragraph CreateSystemLogParagraph(MLAstro_Robotic_Polar_Alignment.Dockables.SystemLogEntry entry, bool darkBackground)
+        {
+            var paragraph = new System.Windows.Documents.Paragraph
+            {
+                Margin = new Thickness(0),
+                Padding = new Thickness(0)
+            };
+
+            var levelBrush = MLAstro_Robotic_Polar_Alignment.Dockables.SystemLogEntry.BrushForLevel(entry.Level, darkBackground);
+            var highlightBrush = MLAstro_Robotic_Polar_Alignment.Dockables.SystemLogEntry.HighlightBrush(darkBackground);
+            var text = entry.DisplayText ?? string.Empty;
+
+            const string withParens = "(Backlash applied)";
+            const string bare = "Backlash applied";
+            var token = text.Contains(withParens) ? withParens : (text.Contains(bare) ? bare : null);
+
+            if (token == null)
+            {
+                paragraph.Inlines.Add(new System.Windows.Documents.Run(text)
+                {
+                    Foreground = levelBrush,
+                    FontWeight = entry.FontWeightValue
+                });
+                return paragraph;
+            }
+
+            // Khi chỉ có "Backlash applied" (kèm phần đuôi trong ngoặc) → web thay bằng "(Backlash applied)".
+            var highlightedText = token == bare ? withParens : token;
+            var index = 0;
+
+            while (true)
+            {
+                var found = text.IndexOf(token, index, StringComparison.Ordinal);
+                if (found < 0)
+                {
+                    break;
+                }
+
+                if (found > index)
+                {
+                    paragraph.Inlines.Add(new System.Windows.Documents.Run(text.Substring(index, found - index))
+                    {
+                        Foreground = levelBrush,
+                        FontWeight = entry.FontWeightValue
+                    });
+                }
+
+                paragraph.Inlines.Add(new System.Windows.Documents.Run(highlightedText)
+                {
+                    Foreground = highlightBrush,
+                    FontWeight = FontWeights.Bold
+                });
+
+                index = found + token.Length;
+            }
+
+            if (index < text.Length)
+            {
+                paragraph.Inlines.Add(new System.Windows.Documents.Run(text.Substring(index))
+                {
+                    Foreground = levelBrush,
+                    FontWeight = entry.FontWeightValue
+                });
+            }
+
+            return paragraph;
+        }
+
+        /// <summary>
+        /// Xác định panel log đang nằm trên nền tối hay sáng (đi ngược visual tree tới brush nền
+        /// đặc đầu tiên) để chọn màu chữ tương phản với chính màu nền đó.
+        /// </summary>
+        private static bool IsDarkBackground(DependencyObject element)
+        {
+            try
+            {
+                var current = element;
+                while (current != null)
+                {
+                    Brush? background = null;
+                    if (current is Panel panel) background = panel.Background;
+                    else if (current is Border border) background = border.Background;
+                    else if (current is Control control) background = control.Background;
+
+                    if (background is SolidColorBrush solid && solid.Color.A > 0)
+                    {
+                        return Luminance(solid.Color) < 0.5;
+                    }
+
+                    current = System.Windows.Media.VisualTreeHelper.GetParent(current);
+                }
+            }
+            catch
+            {
+            }
+
+            // Không xác định được → coi là nền tối (mặc định của NINA) để dùng chữ sáng dễ đọc hơn.
+            return true;
+        }
+
+        private static double Luminance(Color color)
+            => ((0.299 * color.R) + (0.587 * color.G) + (0.114 * color.B)) / 255.0;
+
         private void OnSerialTerminalLoaded(object sender, RoutedEventArgs e)
         {
             if (sender is not RichTextBox richTextBox || richTextBox.Tag is TerminalSubscriptionState)
