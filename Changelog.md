@@ -12,304 +12,181 @@
 ## 2.1.0.0
 
 ### MLAstroRPA — Wireless connection (WebSocket over mDNS)
-- **New connection type selector** at the top of the CONNECTION tab: `Serial connection`
-  (unchanged) or **`Wireless connection`**. Choosing Wireless hides every serial-only setting
-  (COM port, data bits/parity/stop bits, refresh ports, pause-polling, handshake timeout, polling
-  period, Hex/Send row) and shows the wireless panel instead.
-- **Wireless panel** contains exactly: **Address** (`MLAstroRPA.local` by default, or the device IP
-  as a fallback when mDNS does not resolve), **Connection** (Connect/Disconnect + status), and
-  **System log** (same RichTextBox, now fed by the WebSocket traffic).
+
+- **New connection type selector** at the top of the CONNECTION tab: `Serial connection` (unchanged) or
+  **`Wireless connection`**. Choosing Wireless hides the serial-only settings (COM port, data
+  bits/parity/stop bits, refresh ports, pause-polling, handshake timeout, polling period, Hex/Send row)
+  and shows the wireless panel instead: **Address** (`MLAstroRPA.local` by default, or the device IP as
+  a fallback when mDNS does not resolve), **Connection** (Connect/Disconnect + status) and **System log**
+  (same RichTextBox, fed by the WebSocket traffic).
 - **WebSocket transport** (`MlastroWebSocketService`) connects to `ws://<address>:80/ws`, performs the
   PC handshake `{"cmd":"handshake","data":{"key":"MLAstroRPA-TC"}}` and then behaves like the COM
-  port: the serial text protocol is translated to WebSocket JSON (`AAll`/`AzAN`/`AlAN` → `align`,
-  `STOP`/`ESTOP` → `stop`/`forceStop`, `ReER` → `resetError`, home commands, `SLvl` → `speedLevel`,
-  configuration chain → `applyConfig`/`saveConfig` + `reboot`, `Disconnect` → `releaseControl`).
-- Incoming JSON telemetry is converted back into the firmware's serial telemetry text and injected
-  into the existing pipeline, so the CONTROL/CONFIGURATION tabs, the MLAstro dock and
-  `TelemetryParser` keep working unchanged (no duplicated parsing logic).
-- **TPPA automated adjustment works over Wireless**: `MlastroWirelessSerial` implements
-  `ISerialLink`, so the polar-alignment driver (`UniversalPolarAlignmentMLAstroRPA`) uses the
-  WebSocket session when `PluginSettings.TransportMode == Wireless` (sharing the single PC session
-  with the plugin UI — the firmware only allows one PC client).
-- Safety: switching connection type disconnects the current transport first (a single transport may
-  hold control at a time), and losing the wireless link raises the same external-stop path so a
-  running polar-alignment routine is aborted.
-- ~~Known limitation: AP SSID/IP/subnet and Station SSID/password are **not** transmitted over
-  WebSocket (firmware has no such command) — change them while connected via Serial.~~
-  **Fixed** — see *Wireless: complete text-to-JSON translator* below: they are now written over
-  WebSocket through `saveConfig` (`wifi` / `wifi_ap`, with `no_reboot` + explicit `reboot`).
+  port: the serial text protocol is translated to WebSocket JSON and incoming JSON telemetry is
+  converted back into the firmware's serial telemetry text and injected into the existing pipeline, so
+  the CONTROL/CONFIGURATION tabs, the MLAstro dock and `TelemetryParser` keep working unchanged (no
+  duplicated parsing logic).
+- **TPPA automated adjustment works over Wireless**: `MlastroWirelessSerial` implements `ISerialLink`,
+  so the polar-alignment driver (`UniversalPolarAlignmentMLAstroRPA`) uses the WebSocket session when
+  `PluginSettings.TransportMode == Wireless` (sharing the single PC session with the plugin UI — the
+  firmware only allows one PC client).
+- `SerialConnectionService` acts as a facade while Wireless is active: `IsConnected`, `ConnectionStatus`,
+  `HandshakeStatus`, `FirmwareVersion`, `Send`, `SendCommandAndAwaitOkAsync`, `ResetEsp32`,
+  `QueryTelemetry` and the external-control API all route to the WebSocket session (the COM port stays
+  closed), so the CONTROL/CONFIGURATION tabs and the dock report "connected" as usual.
+- Safety: switching connection type disconnects the current transport first (a single transport may hold
+  control at a time), and losing the wireless link raises the same external-stop path so a running
+  polar-alignment routine is aborted.
 
-### MLAstroRPA — Wireless: System log & fake alarms fixed
+**Files:** `MLAstroRPA-navigation/Settings/PluginSettings.cs`,
+`MLAstroRPA-implement/Services/MlastroWebSocketService.cs`,
+`MLAstroRPA-implement/Services/SerialConnectionService.cs`,
+`MLAstroRPA-implement/MlastroWirelessSerial.cs`,
+`MLAstroRPA-implement/UniversalPolarAlignmentMLAstroRPA.cs`,
+`MLAstroRPA-navigation/Plugin/MLAstroController.cs`, `MLAstroRPA-navigation/Plugin/MLAstroOptions.xaml`
 
-- **Fake "Alarm History" warnings on connect (WSta / Home / AzRM / AlRM / Back):** the synthesized
-  telemetry line fed into the shared pipeline was also parsed by the error-telemetry parser, which
-  accepted *any* `Key:value` list — so telemetry DATA_SETTING keys whose value is `1`
-  (`WSta:1` WiFi status, `Home:1` homed, `AzRM:1`/`AlRM:1` run mode, `Back:1` backlash) became
-  ACTIVE WARNING rows. `ProcessErrorTelemetry` now only accepts lines starting with `ERROR:`
-  (firmware code list: Sys/AzNC/AlNC/AzOT/AlOT/AzPW/AlPW/AzSA/AzSB/AlSA/AlSB/AzOL/AlOL/AzHL/AlHL/AzSL/AlSL/Esc),
-  and the wireless session starts from a clean error state (`ResetErrorStateForNewSession`).
-- **System log cleaned up:** TX/RX prefixes are no longer duplicated (`RX: RX: …` → `RX: …`), the
-  250 ms telemetry stream is no longer written to the log (it still feeds the UI/driver), and
-  connection lifecycle messages are shown as neutral status entries instead of fake RX lines.
-- **CONTROL / CONFIGURATION tabs and the dock now report "connected" in Wireless mode**:
-  `SerialConnectionService` acts as a facade — `IsConnected`, `ConnectionStatus`, `HandshakeStatus`,
-  `FirmwareVersion`, `Send`, `SendCommandAndAwaitOkAsync`, `ResetEsp32`, `QueryTelemetry` and the
-  external-control API all route to the WebSocket session while the wireless transport is active
-  (the COM port stays closed). The firmware version is now taken from the WebSocket handshake /
-  init snapshot, and AP/Station passwords are synced from that snapshot.
-- Connect hints now say *(Serial or Wireless)*, and the dock hint points at the **CONNECTION** tab.
+### MLAstroRPA — Complete text<->JSON translator on the WebSocket boundary
 
-### MLAstroRPA — Wireless: jog / relative / password commands
+- The WebSocket wire protocol stays **pure JSON** (the web UI's own command set) while the plugin and the
+  TPPA driver keep the **serial text protocol**; everything is translated at the
+  `MlastroWebSocketService` boundary, so both halves work over Wireless exactly as over the COM port.
+- **Commands** — jog (`MAzL/MAzR/MAlU/MAlD:1` → `move`, release → `stopMove`), Relative mode
+  (`JoRe/ReDe/ReAM/ReAS` → `saveConfig{relative}`, arrow press → `moveRelative`), `STOP`/`ESTOP`,
+  `ReER`, the home commands, `SLvl`, align (`AAll`/`AzAN`/`AlAN` → `align`; `AzED…/AzDi` without a
+  trigger → `saveConfig{align}`, i.e. the values are stored **without** moving the axis), `ApplyConf` →
+  `applyConfig`, the whole configuration chain → `saveConfig`/`applyConfig`, `Disconnect` →
+  `releaseControl`, and `APss/APpa/APip/APsu`, `STAs/STAp` → `saveConfig{wifi_ap}` / `{wifi}` (with
+  `no_reboot` plus an explicit `reboot` after the ack) — so **WiFi/AP settings and passwords can now be
+  saved over Wireless**. Read-only / telemetry-only keys are ignored instead of being reported as
+  unsupported, and repeated jog sends are collapsed (the firmware rejects motion commands while moving).
+- **Telemetry** — the JSON frame is synthesized back into the firmware's serial telemetry text with
+  **every** token the serial line carries: `Scal`, `WSta`, `Home`, `SLvl`, `AzPH`/`AlPH`,
+  `JoRe/ReDe/ReAM/ReAS`, limits, motor, backlash, `APss/APma/APip/APsu`, `STAs/STAm/STAi`, the align
+  errors `AzED/AzEM/AzES/AzDi` (+ Alt) and the `<STATUS|Mpos:…|>` header, using the same number formats
+  as the firmware's `snprintf`. Frames that only carry `sys_status` (`STOPPED`, `REBOOTING`) are not
+  treated as position telemetry.
+- **Two-way setting sync** — the plugin pushes Relative mode/values and every configuration change down
+  with `saveConfig` (tagged `origin:"pcPlugin"` so the Web frontend does not mistake the ack for its own
+  *SAVE ALL & REBOOT*) and reads the state back from the device broadcast and the config snapshot, so
+  the Web UI, the dock and the device can never disagree.
+- **Settings are always read from the backend** — the firmware re-sends the whole configuration
+  (`config_pushed`) whenever it changes (from the web, from the plugin or from Serial) and the plugin
+  re-caches `limits`/`motor`/`backlash`/`serial`/`wifi_ap`/`align`/`align_mode` plus the top-level STA
+  fields, instead of keeping the copy taken at connect time.
 
-- **Jog buttons now work over Wireless.** The dock emits serial-style commands (`MAzL:1`, `MAzR:1`,
-  `MAlU:1`, `MAlD:1`, released with `:0`, resent every 250 ms by the jog watchdog) and the WebSocket
-  bridge had no rule for them, so every press logged *"command not supported over Wireless"* and no
-  motion happened. They are now translated to `move` (`axis`/`direction`/`speed`) and `stop`.
-- Duplicate jog sends are **collapsed**: the firmware rejects any motion command while a motion is
-  running (`rejectMotionStartIfBusy`), so the 250 ms watchdog repeats would only produce
-  *"Motion is active…"* alerts. A repeated press of the same direction is now a no-op until the
-  direction changes or the button is released.
-- **Relative mode over Wireless**: `JoRe` / `ReDe` / `ReAM` / `ReAS` have no WebSocket equivalent, so
-  they are remembered locally and an arrow press becomes a single `moveRelative` (axis + direction +
-  angle + speed). Releasing the button sends nothing, matching the serial firmware behaviour.
-- `APpa:?` / `STAp:?` (password queries) are answered from the WebSocket init snapshot instead of
-  being logged as unsupported.
-- `STOP:0` / `ESTOP:0` (button-release events) are ignored, as in the serial protocol.
-- Telemetry frames that only carry `sys_status` (e.g. `STOPPED`, `REBOOTING`) are no longer treated
-  as position telemetry, so they cannot reset the displayed Az/Alt position.
-- Still Serial-only: **setting** `APpa` / `STAp` / `APss` / `APip` / `STAs` (the firmware WebSocket API
-  has no command for them) — the log states this explicitly.
-
-### MLAstroRPA — Wireless: System log panel now matches the Web UI
-
-- The Wireless **System log** is no longer the raw serial terminal. It is now a web-style table:
-  `[h:mm:ss tt] message`, colour-coded with the same keyword rules as the Web UI
-  (`CRITICAL/ERROR/failed` → red bold, `WARNING/limit` → dark orange, `COMPLETED/saved` → green,
-  `[Apply]`/`[SAVE&REBOOT required]`/`Reset by User` → orange/blue, default black), newest entry on
-  top, capped at **50 lines**, and the Web UI's noisy *"Manual stop sequence completed. Hardlimit
-  re-enabled."* line is filtered out.
-- **No more TX/RX frame logging and no plugin chatter**: the panel now contains *only* what the
-  device sends — the firmware `log` messages plus the `reason` of `controlTakenBySerial` /
-  `controlReleased` — reproduced verbatim (no `NOTE:`/`ERROR:` prefixes, lowercase `am/pm` time),
-  exactly like the Web UI's System Log. Plugin diagnostics (*Resolving…*, *Connected…*,
-  *Handshake: OK!…*) go to the NINA log file instead, and firmware `alert` messages are surfaced as
-  NINA toast notifications (the Web UI shows them as a modal, not in the log).
-- The serial terminal (RichTextBox + Hex/Send) is unchanged and is now shown **only** for
-  `Serial connection`; Wireless shows this web-style log instead.
-- The log is rendered in a **RichTextBox**, so the text can be **selected and copied** (context menu
-  → Copy), its **background follows the NINA theme** (no forced white box; plain info lines inherit
-  the theme foreground instead of hard-coded black, which was unreadable on dark themes), and a drag
-  **Thumb** below the box resizes its height exactly like the serial terminal.
-- Timestamp format matches the Web UI (`[h:mm:ss tt]`, lowercase `am/pm`).
-- Text colours are now **contrast-aware**: the palette is derived from the panel's effective
-  background (theme-driven, resolved through the visual tree) — light body text plus bright
-  red/amber/green/blue accents on dark themes, the Web UI's original red/darkorange/green/orange plus
-  black body text on light themes. Plain lines used to inherit a dark foreground that was unreadable
-  on dark themes.
-- **Inline highlight**: `(Backlash applied)` is drawn **orange bold**, matching the Web UI's
-  `span.log-backlash` (including the Web UI's behaviour of wrapping a bare `Backlash applied` in
-  parentheses).
-- Added the Web UI's three buttons above the log: **⚠ RESET ERROR** (sends `ReER:1` through the
-  active transport), **Export CSV** (Save-file dialog, `Time,Level,Message`) and **Clear**.
-
-**Files:** `MLAstroRPA-navigation/Dockables/SystemLogEntry.cs` (new),
-`MLAstroRPA-navigation/Services/MlastroWebSocketService.cs`,
+**Files:** `MLAstroRPA-implement/Services/MlastroWebSocketService.cs`,
+`MLAstroRPA-implement/Services/SerialConnectionService.cs`,
 `MLAstroRPA-navigation/Plugin/MLAstroController.cs`,
-`MLAstroRPA-navigation/Plugin/MLAstroOptions.xaml`,
-`MLAstroRPA-navigation/Services/SerialConnectionService.cs`
+`MLAstroRPA-implement/MlastroWirelessSerial.cs`
 
-### MLAstroRPA — Wireless: jog deceleration, Relative mode, alarms & error logs
+### MLAstroRPA — System log & dock parity with the Web UI
 
-- **Jog release now decelerates** instead of stopping dead. The WebSocket `stop` command calls
-  `stopAllMotion()`, which cancels the far target with `setCurrentPosition()` (a deliberate hard stop
-  for the STOP/E-STOP buttons) — so releasing a jog braked instantly. Added a dedicated
-  `{"cmd":"stopMove","data":{"axis":"az|alt"}}` command mirroring the Serial `MAzL:0` / `MAlU:0`
-  release (`setAcceleration(decel)` + `stop()`), used by the plugin **and** by the Web UI jog release
-  (mouse-up / mouse-leave / touch-end / arrow key-up). STOP and E-STOP keep the old hard-stop path.
-- **Relative mode stays on**: `TelemetryData.IsRelativeMode` is parsed from the telemetry `JoRe` key,
-  which the WebSocket telemetry does not carry — so the dock reset the toggle to OFF on every packet.
-  The synthesized telemetry line now includes `JoRe`/`ReDe`/`ReAM`/`ReAS` from the tracked state.
-- **Alarm History now works over Wireless**: the firmware broadcasts its error telemetry as
-  `{"error":"ERROR:Code:value,..."}` (edge-triggered, same string as the Serial line); the plugin
-  feeds it into the shared pipeline, so the dock's Alarm panel and `HasActiveErrors` behave exactly as
-  with the COM port.
-- **Error/warning logs now appear in the System log**: each `alert` from the firmware is added to the
-  log (colour-coded) in addition to the NINA toast, and every error-state change writes a readable
-  summary line — e.g. `DRIVER ERROR: AZ open load (AzOL), ALT hard limit (AlHL)` / `All clear`.
+- The Wireless **System log** is a web-style table instead of the raw serial terminal: the same keyword
+  colouring as the Web UI (contrast-aware palette derived from the panel background), newest entry on
+  top, capped at 50 lines, timestamps in the locale short format (`[h:mm:ss tt]`), rendered in a
+  RichTextBox (selectable/copyable, context menu → Copy) with a drag Thumb to resize its height. The
+  Web UI's noisy *"Manual stop sequence completed. Hardlimit re-enabled."* line is filtered out.
+- **The panel contains exactly what the Web UI shows**: the device `log` messages plus the `reason` of
+  `controlTakenBySerial` / `controlReleased`, reproduced verbatim (no `NOTE:`/`ERROR:` prefixes, no
+  TX/RX frame dumps, no plugin chatter). Plugin diagnostics (*Resolving…*, *Connected…*,
+  *Handshake: OK!…*) go to the NINA log file instead, and firmware `alert` messages are surfaced as
+  NINA toast notifications (the Web UI shows them as a modal, not in the log). `(Backlash applied)` is
+  highlighted orange bold, matching the Web UI's `span.log-backlash`.
+- The Web UI's three buttons are available above the log: **⚠ RESET ERROR** (sends `ReER:1` through the
+  active transport), **Export CSV** (`Time,Level,Message`) and **Clear**.
+- Telemetry data keys are never parsed as alarms: `ProcessErrorTelemetry` only accepts lines starting
+  with `ERROR:` (the firmware's code list), so `WSta:1`/`Home:1`/`AzRM:1`/`Back:1` can no longer raise
+  fake WARNING rows, and every new session starts from a clean error state.
+- Connect hints now say *(Serial or Wireless)* and the dock hint points at the **CONNECTION** tab.
 
-**Files:** `MLAstroRPA-navigation/Services/MlastroWebSocketService.cs`,
-`src/Web/WebControl.cpp`, `src/Serial/SerialControl.cpp`, `data/script.js` (firmware repo),
-`src/Websocket-protocol.md`
+**Files:** `MLAstroRPA-navigation/Dockables/SystemLogEntry.cs`,
+`MLAstroRPA-implement/Services/MlastroWebSocketService.cs`,
+`MLAstroRPA-implement/Services/SerialConnectionService.cs`,
+`MLAstroRPA-navigation/Plugin/MLAstroController.cs`,
+`MLAstroRPA-navigation/Plugin/MLAstroOptions.xaml`
 
-### MLAstroRPA — Jog: nút mũi tên tự khoá khi bị từ chối vì soft-limit
+### MLAstroRPA — Jog, Relative and soft-limit safety
 
-- Khi firmware từ chối lệnh jog vì trục đã ở/qua soft-limit (`CmdRf` bit JOG_AZ/JOG_ALT → mã
-  `RfJogAz`/`RfJogAl`), plugin **khoá đúng nút hướng vừa bấm** và **nhả jog ngay một lần** (gửi
-  `MAzL:0` / `MAlU:0` qua `StopJogMovement()` — hàm này cũng dừng watchdog 250 ms và xoá lệnh đang
-  chạy) rồi **không gửi lệnh nào nữa** → hết cảnh spam lệnh bị từ chối mỗi 250 ms.
-- Ghi chú kỹ thuật: **chỉ `IsEnabled = false` là KHÔNG đủ** — WPF không phát `MouseUp`/`MouseLeave`
-  cho button vừa bị disable nên handler nhả nút không chạy; vì vậy phải gọi `StopJogMovement()`
-  tường minh ngay khi nhận cảnh báo từ chối.
-- Nút được mở khoá lại khi người dùng bấm **hướng ngược lại** (`UnblockJogAxis`) — lúc đó trục đi ra
-  khỏi giới hạn nên hướng cũ dùng lại được.
-- **Tự mở khoá sau 2 giây** (`JOG_UNBLOCK_DELAY_MS`, `DispatcherTimer`): mỗi lần bị từ chối lại dời hẹn,
-  nên trong lúc giữ/nhấn liên tục nút vẫn khoá, nhưng chỉ 2 s sau lần từ chối cuối là nút sáng lại.
-  Cảnh báo "trục đang ở biên" là tạm thời — trục có thể đã được đưa ra khỏi giới hạn bằng nguồn khác
-  (relative / auto / Web UI) nên không giữ nút khoá vĩnh viễn. Timer được dọn trong `Dispose()`.
-- Chống trùng cảnh báo: nút mũi tên khoá theo **cả hai** nguồn — `AzSL`/`AlSL` (guard vừa hãm dừng trục
-  tại biên) hoặc `RfJogAz`/`RfJogAl` (trục đứng sẵn tại biên mà vẫn nhấn jog). Firmware bảo đảm hai
-  nguồn **loại trừ nhau** nên bảng Alarm và toast chỉ có **1 dòng** cho mỗi sự việc (trước đó jog vào
-  giới hạn làm hiện 2 warning cùng lúc: `AZ soft limit stop` + `AZ jog refused`).
-- Bốn nút mũi tên giờ bind `IsEnabled` vào `CanJogAltUp` / `CanJogAltDown` / `CanJogAzLeft` /
-  `CanJogAzRight` (= `CanManualControl` && chưa bị khoá) thay cho `CanManualControl` trực tiếp.
+- **Jog release decelerates** instead of stopping dead: the plugin uses
+  `{"cmd":"stopMove","data":{"axis":"az|alt"}}` (mirroring the Serial `MAzL:0` / `MAlU:0` release) for
+  mouse-up, mouse-leave, touch-end and arrow key-up; STOP and E-STOP keep the deliberate hard stop.
+- **Jog buttons lock when the soft limit refuses the command**: the pressed direction is disabled, the
+  jog is released once (stop the 250 ms watchdog and send `:0`) and nothing further is sent — no more
+  250 ms spam of refused commands. WPF does not raise `MouseUp`/`MouseLeave` for a button that is
+  disabled mid-press, so the release has to be issued explicitly. The button is re-enabled when the
+  opposite direction is pressed (the axis then moves away from the limit) or automatically **2 s**
+  after the last refusal, because an "at the limit" state is temporary — the axis may have been moved
+  back by another source (relative move, auto routine, Web UI). The four arrow buttons now bind
+  `IsEnabled` to `CanJogAltUp`/`CanJogAltDown`/`CanJogAzLeft`/`CanJogAzRight` instead of `CanManualControl`.
+- **Relative mode stays on**: `TelemetryData.IsRelativeMode` is parsed from the `JoRe` token, which the
+  WebSocket telemetry does not carry, so the dock used to reset the toggle on every packet; the
+  synthesized telemetry line now includes `JoRe/ReDe/ReAM/ReAS` from the state tracked together with the
+  device, and releasing an arrow button in Relative mode sends nothing (as in the serial protocol).
 
 **Files:** `MLAstroRPA-navigation/Dockables/PolarAlignmentDockVM.cs`,
-`MLAstroRPA-navigation/Dockables/PolarAlignmentDockable.xaml`
+`MLAstroRPA-navigation/Dockables/PolarAlignmentDockable.xaml`,
+`MLAstroRPA-implement/Services/MlastroWebSocketService.cs`
 
-### MLAstroRPA — Alarm: nút CLEAR + tên cảnh báo soft-limit
+### MLAstroRPA — Alarm panel (CLEAR, decoded refusals, newest on top)
 
-- Bảng **Alarm History** có thêm nút **🗑 CLEAR** (`ClearAlarmHistoryCommand`) để xoá lịch sử cảnh báo.
-  Nút chỉ xoá phần hiển thị — **không** đụng tới trạng thái lỗi/cảnh báo đang active của thiết bị
-  (khác với `ClearAlarmHistory()` nội bộ dùng khi ngắt kết nối, hàm này vẫn reset cả trạng thái).
-- Đổi tên hiển thị cho khớp log firmware: `AzSL`/`AlSL` = **"AZ/ALT soft limit reached"** (trước là
-  "AZ soft limit stop") và `RfJogAz`/`RfJogAl` = **"AZ/ALT jog refused (already at soft limit)"** —
-  nhờ vậy dòng trên bảng Alarm đọc ra giống hệt dòng log trong System Log, dễ đối chiếu.
+- **Alarm History works over Wireless**: the firmware's `{"error":"ERROR:Code:value,…"}` frames are fed
+  into the shared pipeline, so the panel and `HasActiveErrors` behave exactly as with the COM port.
+- The `CmdRf` bitfield is decoded into individual **WARNING** codes with self-explaining names —
+  `RfRelAz`/`RfRelAl` (relative move refused), `RfAlnAz`/`RfAlnAl`/`RfAlnOv` (align target / overshoot
+  leg out of range) and `RfJogAz`/`RfJogAl` (jog refused at the limit) — each with its activation and
+  end time on the same row. Because they are warnings they never lock the system.
+- Alarm rows read exactly like the matching System log line: `AzSL`/`AlSL` are shown as
+  *AZ/ALT soft limit reached* and `RfJogAz`/`RfJogAl` as *AZ/ALT jog refused (already at soft limit)*.
+- A **🗑 CLEAR** button clears the displayed history only — the device's active error state, the alarm
+  toasts and the System log are untouched (unlike the internal reset performed on disconnect).
+- **Newest alarm on top**, older ones below — the same order as the System log and the Web UI log.
+- **One notification per event**: the alarm code is the single notification channel (it exists on both
+  transports), so a limit alert no longer produces a second NINA dialog next to the alarm warning; the
+  more detailed alert text is still written to the NINA log file.
 
-**Files:** `MLAstroRPA-navigation/Services/SerialConnectionService.cs`,
+**Files:** `MLAstroRPA-implement/Services/SerialConnectionService.cs`,
 `MLAstroRPA-navigation/Dockables/PolarAlignmentDockVM.cs`,
 `MLAstroRPA-navigation/Dockables/PolarAlignmentDockable.xaml`
 
-### MLAstroRPA — Alarm: hiển thị các lệnh bị TỪ CHỐI vì soft-limit (`CmdRf`)
+### MLAstroRPA — CONNECTION tab cleanup + fixed "Reset ESP32" reconnect over Wireless
 
-- Dòng ERROR telemetry có token mới `CmdRf:<bitfield>`: mỗi bit là một loại lệnh bị từ chối vì
-  soft-limit, bật ngay lúc bị từ chối và firmware tự tắt sau ~1.5 s nếu loại lệnh đó không còn bị
-  từ chối nữa.
-- Plugin **giải mã bitfield** thành từng mã riêng, mức **WARNING** (giá trị 1), với tên rõ ràng:
-  `RfRelAz` / `RfRelAl` (relative move AZ/ALT), `RfAlnAz` / `RfAlnAl` / `RfAlnOv` (align: target AZ,
-  target ALT, nhánh overshoot ALT), `RfJogAz` / `RfJogAl` (jog tại giới hạn) → mỗi mã một dòng trong
-  **Alarm History** kèm thời điểm bắt đầu và kết thúc.
-- Vì là WARNING nên không khóa hệ thống và không bắn toast (giống các cảnh báo soft-limit khác).
+- **Serial panel simplified:** the read-only *Data Bits* / *Parity* / *Stop Bits* boxes and the
+  **Refresh Ports** button are gone — the COM port is always `115200 8N1` and the port list already
+  refreshes when the dropdown is opened, so the button was redundant.
+- **Wireless panel:** the `Connection:` label was removed and **Reset ESP32** (renamed from
+  *Reboot device*) now sits in the same row as **Connect**.
+- **Fixed — Reset ESP32 over Wireless never reconnected.** The button only sent `reboot`: the plugin
+  stayed "connected" from its own point of view (`ConnectAsync()` returns immediately while
+  `IsConnected == true`, so the automatic retry did nothing) and the device kept the previous PC
+  session, so a fresh handshake could be refused (*"Another PC session is already in control"*) until
+  the dead socket timed out (~15 s keepalive). The button now (1) sends `releaseControl` so the device
+  frees the PC slot before restarting, (2) aborts the socket, and (3) reconnects — with the wireless
+  retry window raised to 30 attempts so a full reboot + WiFi join fits.
 
-**Files:** `MLAstroRPA-navigation/Services/SerialConnectionService.cs`
+**Files:** `MLAstroRPA-navigation/Plugin/MLAstroOptions.xaml`,
+`MLAstroRPA-navigation/Plugin/MLAstroController.cs`,
+`MLAstroRPA-implement/Services/MlastroWebSocketService.cs`
 
-### MLAstroRPA — Wireless: System log now identical to the Web UI (removed 2 extra sources)
+### MLAstroRPA — WiFi passwords fetched on demand, settings never keep stale values
 
-- The plugin's System log used to show two kinds of lines the Web UI never has:
-  (1) the device `alert` (e.g. `⚠️ Soft Limit Reached! AZ axis stopped at configured limit.`) and
-  (2) plugin-generated driver summaries (`DRIVER WARNING: AZ soft limit stop (AzSL)`,
-  `DRIVER ERROR: …`, `All clear - no active driver errors`).
-- The Web UI shows `alert` in a **modal** (`showModal('System Message', data.alert)`) and does **not**
-  log it; it has no driver-summary lines at all. The plugin now matches exactly: `alert` → NINA toast
-  (equivalent of the modal) + NINA log file only, `error` telemetry → Alarm History panel + NINA log
-  file only.
-- Removed the now-dead `AddErrorSummaryToSystemLog()` helper and its `_lastErrorSummary` field.
-- The System log therefore has exactly the two device-origin sources the Web UI has: the `log`
-  messages and the `reason` of `controlTakenBySerial` / `controlReleased`.
-- Driver alarms remain fully visible in the **Alarm History** panel and as NINA notifications.
-- The log timestamp now uses the locale's **short time** pattern (`ToString("t")`) — the same source the
-  Web UI uses (`toLocaleTimeString()`), so a vi-VN machine shows `[17:07:51]` on both sides instead of
-  the plugin showing `[5:07:51 pm]`.
+- **Password is no longer part of the snapshot sync.** The firmware stopped broadcasting `pass` in the
+  connect snapshot / config push (those frames reach every client), so the plugin no longer reads it
+  from there and no longer shows a cached copy.
+- **Eye icon = real device read.** Over Wireless, `STAp:?` / `APpa:?` now send the new `getConfig`
+  command and feed the `configRead` answer back through the firmware text stream, so the CONFIGURATION
+  tab displays the value the **device** actually holds (same behaviour as the Serial cable path).
+  A serial `APpa:` / `STAp:` answer is accepted even when it is **empty** — an empty password is real
+  information, and hiding it is what made the earlier "STA fails with reason 15" diagnosis point at
+  the router instead of at the lost credential.
+- **Saving can no longer wipe a stored password:** the plugin never sends `STAp:` / `APpa:` when the
+  field is empty (WPF's `UpdateSourceTrigger=PropertyChanged` pushes intermediate `""` values while
+  retyping). Leaving the box empty means "keep the device value".
+- **No fabricated defaults for telemetry-mirrored settings:** *Current STA Mode IP* starts empty
+  instead of the placeholder text `Waiting for connection...`.
 
-**Files:** `MLAstroRPA-navigation/Services/MlastroWebSocketService.cs`,
-`MLAstroRPA-navigation/Dockables/SystemLogEntry.cs`
-
-### MLAstroRPA — Wireless: Relative mode now pushes to the device (Web/PC stay in sync)
-
-- Toggling **Jog ↔ Relative** (or editing the relative degrees/minutes/seconds) in the dock now also
-  pushes the setting **down to the firmware** via `saveConfig` with `{"relative":{mode,d,m,s}}` —
-  exactly what the Web UI does (`saveRelativeSettings()`). Previously `JoRe`/`ReDe`/`ReAM`/`ReAS` were
-  only remembered inside the plugin, so the device (and the Web UI monitoring from a browser) stayed in
-  *Jog* while the PC was already moving relatively.
-- The plugin also reads the state **back** from the device: the new firmware broadcast
-  `{"relative":{...}}` and the connect snapshot both update the tracked state, so the dock, the
-  synthesized telemetry (`JoRe`/`ReDe`/`ReAM`/`ReAS`) and the Web UI can never disagree.
-- Sends are tagged `origin:"pcPlugin"` so the firmware's `configSaved` ack is not mistaken by the Web
-  frontend for the ack of its own *SAVE ALL & REBOOT* flow.
-
-**Files:** `MLAstroRPA-navigation/Services/MlastroWebSocketService.cs`
-
-**Files:** `MLAstroRPA-navigation/Settings/PluginSettings.cs`,
-`MLAstroRPA-navigation/Services/MlastroWebSocketService.cs`,
-`MLAstroRPA-implement/MlastroWirelessSerial.cs`,
-`MLAstroRPA-implement/UniversalPolarAlignmentMLAstroRPA.cs`, `MLAstroRPA-navigation/Plugin/MLAstroController.cs`,
-`MLAstroRPA-navigation/Plugin/MLAstroOptions.xaml`, `MLAstroRPA-navigation/Services/SerialConnectionService.cs`
-
-### MLAstroRPA — Wireless: complete text-to-JSON translator (commands + telemetry)
-
-Cấu trúc giao tiếp **chốt lại**: phía WebSocket luôn là **JSON thuần** (đúng bộ lệnh của web UI),
-phía plugin/TPPA giữ nguyên **giao thức text Serial** cũ. Toàn bộ việc dịch nằm ở một chỗ —
-`MlastroWebSocketService.Translate()` (text → JSON) và `BuildSerialTelemetryLine()` /
-`AppendSnapshotTokens()` (JSON → text) — và nay đã **phủ hết** mọi lệnh + mọi token telemetry.
-
-- **Lệnh (text → JSON)**: bổ sung các lệnh trước đây bị bỏ qua hoặc dịch sai ngữ nghĩa
-  - `APss` / `APpa:X` / `APip` / `APsu` → `saveConfig{wifi_ap:{…}, no_reboot:true}` rồi `reboot`;
-  - `STAs` / `STAp:X` → `saveConfig{wifi:{…}, no_reboot:true}` rồi `reboot`;
-  - **Lưu cài đặt WiFi/AP/password bằng Wireless nay đã có tác dụng** (trước đây bị bỏ im lặng,
-    phần password còn không được gửi đi ở nhánh wireless); kèm `no_reboot:true` để nhận được ack
-    `configSaved` thay vì bị device reboot trước khi kịp xác nhận.
-  - `AzED/AzEM/AzES/AzDi` (+ `Al…`) **không kèm** `AzAN/AlAN/AAll` → `saveConfig{align:{…}}`
-    (ghi FRAM, **không chạy motor**) — trước đây bị dịch thành lệnh `align` nên **chỉ gõ số vào ô
-    sai số trên dock cũng làm mount quay**; nay đúng như Serial.
-  - `AzAN/AlAN/AAll` → `align{ra_error,dec_error,simultaneous}` (chỉ chạy trục được kích hoạt;
-    nếu lệnh không kèm giá trị thì dùng giá trị đang lưu trong device, đúng như Serial).
-  - `ApplyConf` → `applyConfig` với toàn bộ cài đặt hiện tại.
-  - `Home` (read-only), `STAi` (firmware bỏ qua), `APma`/`STAm`/`Scal`/`WSta`/`AzPH`/`AlPH`
-    (chỉ-telemetry) → không gửi, **không còn log warning nhiễu**.
-- **Telemetry (JSON → text)**: bổ sung các token còn thiếu so với đường Serial — `Scal`, sai số align
-  (`AzED/AzEM/AzES/AzDi/AlED/AlEM/AlES/AlDi`), `APma`, `STAs`/`STAm`/`STAi`; đồng thời định dạng số
-  khớp `snprintf` của firmware (`AzL1:%.1f`, `AzSD:%.5f`, `AzES:%.2f`…) để dock/TPPA nhận đúng kiểu.
-- **Cache snapshot cấu hình** mở rộng: `limits`, `motor`, `backlash`, `wifi_ap`, `serial`, `align`,
-  `align_mode` + các giá trị cấp cao nhất (`ssid`, `ip`, `sta_mac`) — làm phẳng theo khoá `cha.con`
-  (`align.az.d`) nên thêm cài đặt mới ở firmware chỉ cần thêm 1 tên section + 1 dòng `AddToken`.
-- **Cài đặt luôn đồng bộ 2 chiều**: firmware nay push lại toàn bộ cấu hình (`config_pushed`)
-  mỗi khi cấu hình thay đổi (từ web, từ plugin hoặc từ Serial), nên plugin không còn giữ bản cache
-  cũ đọc từ lúc kết nối.
-- **Alarm qua Wireless**: firmware sửa gate ERROR telemetry (gửi WebSocket trước/độc lập với
-  buffer TX của UART) → bảng **Alarm History của plugin đã hiện đầy đủ như khi dùng cáp Serial**;
-  mốc so sánh được reset ngay sau handshake nên plugin nhận ngay trạng thái lỗi đang tồn tại.
-
-**Files:** `MLAstroRPA-navigation/Services/MlastroWebSocketService.cs`,
-`MLAstroRPA-navigation/Plugin/MLAstroController.cs`
-
-### MLAstroRPA — Wireless: một sự việc chỉ còn MỘT thông báo (hết toast `alert` trùng)
-
-- Bấm/giữ jog khi chạm soft-limit qua **Wireless** hiện **2 hộp thoại** cho cùng một sự việc:
-  `alert` của firmware (`⚠ Soft Limit Reached! AZ axis stopped at configured limit.`) và cảnh báo
-  sinh từ mã lỗi trong ERROR telemetry (`AzSL` → `AZ soft limit reached`). Đường **Serial** chỉ có
-  kênh mã lỗi nên vẫn chỉ 1 thông báo.
-- Nay các `alert` **liên quan giới hạn** (soft/hard limit, align/relative bị từ chối — luôn đi kèm
-  mã lỗi `AzSL/AlSL/AzHL/AlHL/RfJog*/RfAln*`) **không toast riêng** nữa; kênh mã lỗi được giữ làm
-  nguồn thông báo duy nhất vì đây là kênh có ở **mọi** môi trường điều khiển → câu chữ và số lượng
-  thông báo giống nhau dù dùng cáp hay Wireless.
-- Nội dung `alert` chi tiết hơn (vd hướng cần nhấn để thoát hard-limit) **vẫn được ghi** vào file log
-  NINA như trước; mọi `alert` khác (System Locked, Motion is active, Factory Zero, OTA, Ignored
-  Align…) vẫn toast bình thường.
-
-**Files:** `MLAstroRPA-navigation/Services/MlastroWebSocketService.cs`
-
-### MLAstroRPA — Alarm History: cảnh báo mới nhất nằm trên cùng
-
-- Bảng **Alarm History** trong dock nay chèn dòng mới lên **đầu** danh sách — alarm mới nhất ở trên,
-  cũ dần xuống dưới — cùng thứ tự với bảng System log của plugin và bảng Log của web UI. Trước đây
-  dòng mới được thêm vào cuối nên cảnh báo vừa xảy ra nằm dưới đáy bảng, phải kéo xuống mới thấy.
-- Quá 100 dòng thì bỏ dòng **cũ nhất** (nay ở cuối bảng); dòng đã hết cảnh báo (có giờ *Cleared*) vẫn
-  giữ nguyên vị trí để không nhảy hàng, nút `🗑 CLEAR` không đổi.
-
-**Files:** `MLAstroRPA-navigation/Dockables/PolarAlignmentDockVM.cs`,
-`MLAstroRPA-navigation/Dockables/PolarAlignmentDockable.xaml`
-
-### MLAstroRPA — Fixed: nút toggle hướng align (Left/Right, Up/Down) không đảo chiều qua Wireless
-
-- Cờ `dir` trong JSON `align.az/alt` là **bool**; translator đọc nó bằng cách chuyển sang chuỗi rồi so
-  `!= "0"` — nhưng `Convert.ToString(false)` là `"False"` (không phải `"0"`) nên **cờ false bị đọc thành
-  true**. Hệ quả: cache hướng align của plugin luôn = "Right/Up" sau mỗi lần nhận snapshot/push cấu hình
-  (kể cả frame push do chính lệnh toggle tạo ra), nên nút **Align Az / Align Alt** (gửi `AzED…,AzAN:1`
-  không kèm `AzDi`) luôn tính sai số dương → trục chạy mãi một hướng, không đảo chiều được.
-- Nay dùng `GetFlag()` cho MỌI trường kiểu cờ (bool / số 0-1 / chuỗi `"1"`|`"true"`) — hướng lấy đúng
-  từ thiết bị và token telemetry `AzDi/AlDi` phản ánh đúng trạng thái toggle trên web/thiết bị.
-- Đường Serial không bị ảnh hưởng (firmware tự dùng giá trị `ser_*_err_dir` đã lưu).
-
-**Files:** `MLAstroRPA-navigation/Services/MlastroWebSocketService.cs`
+**Files:** `MLAstroRPA-implement/Services/MlastroWebSocketService.cs`,
+`MLAstroRPA-implement/Services/SerialConnectionService.cs`,
+`MLAstroRPA-navigation/Plugin/MLAstroController.cs`, `MLAstroRPA-navigation/Plugin/MLAstroOptions.xaml`,
+`MLAstroRPA-navigation/Settings/PluginSettings.cs`
 
 ## 2.0.2.0
 

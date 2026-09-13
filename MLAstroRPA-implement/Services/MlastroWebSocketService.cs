@@ -395,6 +395,12 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
         public bool ResetEsp32()
         {
             if (!IsConnected) return false;
+
+            // Nhả quyền TRƯỚC khi reboot: firmware giải phóng phiên PC ngay (web mở khóa), nếu không
+            // phiên cũ vẫn được giữ ở phía device ⇒ lần kết nối lại có thể bị từ chối
+            // "Another PC session is already in control" cho tới khi socket cũ hết keepalive (~15 s).
+            try { SendJsonAsync("{\"cmd\":\"releaseControl\"}", CancellationToken.None).GetAwaiter().GetResult(); } catch { }
+
             Send("reboot");
             AppendLog("Reboot command sent (wireless).");
             return true;
@@ -533,6 +539,26 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
                     {
                         return;
                     }
+
+                    if (cmd == "configRead")
+                    {
+                        // Trả lời của `getConfig` (đọc riêng password WiFi theo yêu cầu). Bơm vào luồng
+                        // text của firmware như thể thiết bị vừa trả lời `STAp:…` / `APpa:…` → đường
+                        // serial sẽ tự cập nhật settings + UI (giống hệt khi kết nối bằng cáp USB).
+                        if (root.TryGetProperty("data", out var cd) && cd.ValueKind == JsonValueKind.Object)
+                        {
+                            if (TryGetString(cd, "pass", out var staPw))
+                            {
+                                _serial.InjectIncomingText($"STAp:{staPw}\n");
+                            }
+                            if (cd.TryGetProperty("wifi_ap", out var apObj) && apObj.ValueKind == JsonValueKind.Object
+                                && TryGetString(apObj, "pass", out var apPw))
+                            {
+                                _serial.InjectIncomingText($"APpa:{apPw}\n");
+                            }
+                        }
+                        return;
+                    }
                 }
 
                 // 2) Ack của config
@@ -547,11 +573,15 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
 
                 // 3) Snapshot cấu hình: frame đầu tiên sau khi kết nối VÀ mọi frame `config_pushed`
                 //    (firmware push lại khi cấu hình đổi từ bất kỳ đường nào) → luôn cache lại.
+                //    ⚠ Nhánh này CŨNG bắt các frame chỉ chứa MỘT setting (vd `{"speedLevel":2}` khi đổi
+                //    tốc độ, hay `handshakeResult` có `fw_ver`) vì firmware gửi delta cho từng setting.
+                //    Vì vậy mọi hàm con ở đây BẮT BUỘC theo nguyên tắc "chỉ ghi khi field CÓ MẶT":
+                //    thiếu field KHÔNG có nghĩa là thiết bị báo rỗng.
+                //    (Password WiFi KHÔNG nằm trong snapshot — đọc riêng bằng lệnh `getConfig`.)
                 if (TryGetInt(root, "speedLevel", out _) || TryGetString(root, "fw_ver", out _))
                 {
                     CacheSnapshotSections(root);
                     ApplyRelativeState(root); // Jog/Relative đang lưu trên device là nguồn sự thật
-                    ApplyWifiCredentialsFromSnapshot(root);
                     if (TryGetString(root, "fw_ver", out var fw) && fw != _firmwareVersionFromSnapshot)
                     {
                         _firmwareVersionFromSnapshot = fw;
@@ -626,30 +656,6 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
                         }
                     }
                 }
-            }
-        }
-
-        /// <summary>Snapshot chứa SSID/password của AP và STA → đồng bộ về settings (như đường serial).</summary>
-        private void ApplyWifiCredentialsFromSnapshot(JsonElement root)
-        {
-            try
-            {
-                if (root.TryGetProperty("wifi_ap", out var ap) && ap.ValueKind == JsonValueKind.Object
-                    && TryGetString(ap, "pass", out var apPass)
-                    && !string.IsNullOrWhiteSpace(apPass) && apPass != "***")
-                {
-                    _settings.ApPass = apPass;
-                }
-
-                if (TryGetString(root, "pass", out var staPass)
-                    && !string.IsNullOrWhiteSpace(staPass) && staPass != "***")
-                {
-                    _settings.WifiPass = staPass;
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Warning($"[MLAstro][WS] WiFi credential sync failed: {ex.Message}");
             }
         }
 
@@ -1242,15 +1248,18 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
             if (tokens.TryGetValue("MAlU", out var alU)) return HandleArrow("alt", 1, alU);
             if (tokens.TryGetValue("MAlD", out var alD)) return HandleArrow("alt", -1, alD);
 
-            // ---- Truy vấn password WiFi: WebSocket không có lệnh query → trả lời từ snapshot ----
+            // ---- Truy vấn password WiFi: gửi `getConfig` để ĐỌC TỪ THIẾT BỊ (giống `STAp:?` /
+            //      `APpa:?` bên Serial). Password KHÔNG nằm trong snapshot/broadcast nên không thể trả
+            //      lời từ cache — câu trả lời `configRead` sẽ được bơm ngược vào luồng text của firmware
+            //      (xem nhánh xử lý `configRead` trong HandleMessage) nên UI nhận được giá trị thật.
             if (tokens.TryGetValue("APpa", out var apPassQuery) && apPassQuery == "?")
             {
-                InjectDeviceLine($"APpa:{_settings.ApPass}");
+                outgoing.Add("{\"cmd\":\"getConfig\",\"data\":{\"keys\":[\"wifi_ap\"]}}");
                 return outgoing;
             }
             if (tokens.TryGetValue("STAp", out var staPassQuery) && staPassQuery == "?")
             {
-                InjectDeviceLine($"STAp:{_settings.WifiPass}");
+                outgoing.Add("{\"cmd\":\"getConfig\",\"data\":{\"keys\":[\"pass\"]}}");
                 return outgoing;
             }
 

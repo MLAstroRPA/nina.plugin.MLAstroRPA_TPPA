@@ -810,6 +810,11 @@ namespace MLAstro_Robotic_Polar_Alignment.Plugin
                 {
                     return;
                 }
+
+                // PHẢI ngắt phiên hiện tại trước khi kết nối lại: `ConnectAsync()` bỏ qua ngay khi
+                // `IsConnected == true`, nên nếu không Disconnect thì bước "reconnect" không làm gì cả
+                // (UI vẫn báo Connected trong khi socket đã chết theo device đang reboot).
+                _webSocketService.Disconnect();
                 await AutoReconnectAsync(3);
                 return;
             }
@@ -838,11 +843,14 @@ namespace MLAstro_Robotic_Polar_Alignment.Plugin
                 try
                 {
                     var wirelessConfig = _serialConnectionService.BuildConfigurationCommand(Settings);
-                    if (_apPasswordEdited)
+                    // CHỈ gửi password khi có giá trị: binding WPF (UpdateSourceTrigger=PropertyChanged)
+                    // có thể ghi giá trị trung gian rỗng trong lúc người dùng đang gõ lại, và gửi
+                    // "STAp:"/"APpa:" rỗng sẽ XOÁ mật khẩu trên thiết bị (→ STA fail reason 15).
+                    if (_apPasswordEdited && !string.IsNullOrEmpty(Settings.ApPass))
                     {
                         wirelessConfig = $"APpa:{Settings.ApPass}," + wirelessConfig;
                     }
-                    if (_staPasswordEdited)
+                    if (_staPasswordEdited && !string.IsNullOrEmpty(Settings.WifiPass))
                     {
                         wirelessConfig = $"STAp:{Settings.WifiPass}," + wirelessConfig;
                     }
@@ -867,14 +875,18 @@ namespace MLAstro_Robotic_Polar_Alignment.Plugin
 
             try
             {
-                if (_apPasswordEdited && !await _serialConnectionService.SendCommandAndAwaitOkAsync($"APpa:{Settings.ApPass}\n"))
+                // Không gửi giá trị rỗng (xem ghi chú ở nhánh wireless): giá trị rỗng sẽ xoá mật khẩu
+                // đang lưu trên thiết bị, khiến STA không kết nối được nữa (reason 15).
+                if (_apPasswordEdited && !string.IsNullOrEmpty(Settings.ApPass) &&
+                    !await _serialConnectionService.SendCommandAndAwaitOkAsync($"APpa:{Settings.ApPass}\n"))
                 {
                     Logger.Warning("[MLAstro] AP password update was not acknowledged");
                     return;
                 }
                 _apPasswordEdited = false;
 
-                if (_staPasswordEdited && !await _serialConnectionService.SendCommandAndAwaitOkAsync($"STAp:{Settings.WifiPass}\n"))
+                if (_staPasswordEdited && !string.IsNullOrEmpty(Settings.WifiPass) &&
+                    !await _serialConnectionService.SendCommandAndAwaitOkAsync($"STAp:{Settings.WifiPass}\n"))
                 {
                     Logger.Warning("[MLAstro] Station password update was not acknowledged");
                     return;
@@ -966,9 +978,9 @@ namespace MLAstro_Robotic_Polar_Alignment.Plugin
                         await System.Threading.Tasks.Task.Delay(1000);
                     }
 
-                    for (int attempt = 0; attempt < 10; attempt++)
+                    for (int attempt = 0; attempt < 30; attempt++)
                     {
-                        AutoReconnectStatus = $"Connecting... (attempt {attempt + 1}/10)";
+                        AutoReconnectStatus = $"Connecting... (attempt {attempt + 1}/30)";
                         if (await _webSocketService.ConnectAsync())
                         {
                             AutoReconnectStatus = "Connected";

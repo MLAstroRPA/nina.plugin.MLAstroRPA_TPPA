@@ -37,23 +37,7 @@
                             </StackPanel>
                         </WrapPanel>
 
-                        <WrapPanel Margin="0,0,0,10">
-                            <StackPanel Width="120" Margin="0,0,10,10">
-                                <TextBlock Text="Data Bits" Margin="0,0,0,5" />
-                                <TextBox Text="8" IsReadOnly="True" />
-                            </StackPanel>
-                            <StackPanel Width="120" Margin="0,0,10,10">
-                                <TextBlock Text="Parity" Margin="0,0,0,5" />
-                                <TextBox Text="None" IsReadOnly="True" />
-                            </StackPanel>
-                            <StackPanel Width="120" Margin="0,0,10,10">
-                                <TextBlock Text="Stop Bits" Margin="0,0,0,5" />
-                                <TextBox Text="One" IsReadOnly="True" />
-                            </StackPanel>
-                        </WrapPanel>
-
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                            <Button Content="Refresh Ports" Width="110" Margin="0,0,10,0" Command="{Binding RefreshComPortsCommand}" />
                             <Button Content="{Binding SerialConnectButtonText}" Width="110" Margin="0,0,10,0" Command="{Binding ToggleSerialConnectionCommand}" />
                             <Button Content="Reset ESP32" Width="110" Margin="0,0,10,0" Command="{Binding ResetEsp32Command}" />
                             <TextBlock Text="{Binding AutoReconnectStatus}"
@@ -140,25 +124,18 @@
                             </StackPanel>
 
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                                <TextBlock Text="Connection:"
-                                           VerticalAlignment="Center"
-                                           Margin="0,0,8,0"
-                                           FontSize="12" />
                                 <Button Content="{Binding SerialConnectButtonText}"
                                         Width="110"
                                         Margin="0,0,10,0"
                                         Command="{Binding ToggleSerialConnectionCommand}" />
+                                <Button Content="Reset ESP32"
+                                        Width="110"
+                                        Margin="0,0,10,0"
+                                        Command="{Binding ResetEsp32Command}" />
                                 <TextBlock Text="{Binding AutoReconnectStatus}"
                                            VerticalAlignment="Center"
                                            FontWeight="SemiBold"
                                            Foreground="Blue" />
-                            </StackPanel>
-
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                                <Button Content="Reboot device"
-                                        Width="110"
-                                        Margin="0,0,10,0"
-                                        Command="{Binding ResetEsp32Command}" />
                             </StackPanel>
 
                             <TextBlock Text="{Binding SerialConnectionStatus}"
@@ -613,7 +590,8 @@
                                 <StackPanel Width="220" Margin="0,0,10,10">
                                     <TextBlock Text="Current STA Mode IP" Margin="0,0,0,5" />
                                     <TextBox Text="{Binding Settings.WifiIp, Mode=TwoWay}"
-                                             IsReadOnly="True" />
+                                             IsReadOnly="True"
+                                             ToolTip="Lấy từ telemetry (STAi). Trống = chưa có IP từ router." />
                                 </StackPanel>
                             </WrapPanel>
                         </GroupBox>

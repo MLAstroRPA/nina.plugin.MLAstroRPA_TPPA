@@ -452,7 +452,9 @@ namespace MLAstro_Robotic_Polar_Alignment.Settings
 
         public string WifiIp
         {
-            get => GetString(nameof(WifiIp), "Waiting for connection...");
+            // Giá trị này là ẢNH PHẢN CHIẾU của telemetry (STAi do router cấp qua DHCP) nên KHÔNG đặt
+            // giá trị mặc định giả: khi chưa có telemetry thì để RỖNG (UI hiện trống = chưa có IP).
+            get => GetString(nameof(WifiIp), string.Empty);
             set => SetString(value);
         }
 

@@ -1786,25 +1786,29 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
 
             try
             {
-                var apMatch = Regex.Match(receivedText, @"\bAPpa:([^\r\n]+)");
+                // Regex cho phép giá trị RỖNG ([^\r\n]*): mật khẩu rỗng trên thiết bị cũng là thông tin
+                // ĐÚNG cần phản ánh vào settings. Trước đây bỏ qua giá trị rỗng/không khớp nên UI cứ
+                // hiện mật khẩu cũ trong khi thiết bị đã mất mật khẩu (nguyên nhân "STA fail reason 15"
+                // mà tưởng là lỗi router).
+                var apMatch = Regex.Match(receivedText, @"\bAPpa:([^\r\n]*)");
                 if (apMatch.Success)
                 {
                     var value = apMatch.Groups[1].Value.Trim();
-                    if (!string.IsNullOrEmpty(value) && value != "?")
+                    if (value != "?")
                     {
                         _settings.ApPass = value;
-                        Logger.Info("[MLAstro] AP password updated from device");
+                        Logger.Info($"[MLAstro] AP password synced from device ({(value.Length == 0 ? "empty" : "set")})");
                     }
                 }
 
-                var staMatch = Regex.Match(receivedText, @"\bSTAp:([^\r\n]+)");
+                var staMatch = Regex.Match(receivedText, @"\bSTAp:([^\r\n]*)");
                 if (staMatch.Success)
                 {
                     var value = staMatch.Groups[1].Value.Trim();
-                    if (!string.IsNullOrEmpty(value) && value != "?")
+                    if (value != "?")
                     {
                         _settings.WifiPass = value;
-                        Logger.Info("[MLAstro] Station password updated from device");
+                        Logger.Info($"[MLAstro] Station password synced from device ({(value.Length == 0 ? "empty" : "set")})");
                     }
                 }
             }
