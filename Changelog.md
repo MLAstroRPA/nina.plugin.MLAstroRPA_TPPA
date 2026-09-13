@@ -34,8 +34,10 @@
 - Safety: switching connection type disconnects the current transport first (a single transport may
   hold control at a time), and losing the wireless link raises the same external-stop path so a
   running polar-alignment routine is aborted.
-- Known limitation: AP SSID/IP/subnet and Station SSID/password are **not** transmitted over
-  WebSocket (firmware has no such command) — change them while connected via Serial.
+- ~~Known limitation: AP SSID/IP/subnet and Station SSID/password are **not** transmitted over
+  WebSocket (firmware has no such command) — change them while connected via Serial.~~
+  **Fixed** — see *Wireless: complete text-to-JSON translator* below: they are now written over
+  WebSocket through `saveConfig` (`wifi` / `wifi_ap`, with `no_reboot` + explicit `reboot`).
 
 ### MLAstroRPA — Wireless: System log & fake alarms fixed
 
@@ -231,6 +233,70 @@
 `MLAstroRPA-implement/MlastroWirelessSerial.cs`,
 `MLAstroRPA-implement/UniversalPolarAlignmentMLAstroRPA.cs`, `MLAstroRPA-navigation/Plugin/MLAstroController.cs`,
 `MLAstroRPA-navigation/Plugin/MLAstroOptions.xaml`, `MLAstroRPA-navigation/Services/SerialConnectionService.cs`
+
+### MLAstroRPA — Wireless: complete text-to-JSON translator (commands + telemetry)
+
+Cấu trúc giao tiếp **chốt lại**: phía WebSocket luôn là **JSON thuần** (đúng bộ lệnh của web UI),
+phía plugin/TPPA giữ nguyên **giao thức text Serial** cũ. Toàn bộ việc dịch nằm ở một chỗ —
+`MlastroWebSocketService.Translate()` (text → JSON) và `BuildSerialTelemetryLine()` /
+`AppendSnapshotTokens()` (JSON → text) — và nay đã **phủ hết** mọi lệnh + mọi token telemetry.
+
+- **Lệnh (text → JSON)**: bổ sung các lệnh trước đây bị bỏ qua hoặc dịch sai ngữ nghĩa
+  - `APss` / `APpa:X` / `APip` / `APsu` → `saveConfig{wifi_ap:{…}, no_reboot:true}` rồi `reboot`;
+  - `STAs` / `STAp:X` → `saveConfig{wifi:{…}, no_reboot:true}` rồi `reboot`;
+  - **Lưu cài đặt WiFi/AP/password bằng Wireless nay đã có tác dụng** (trước đây bị bỏ im lặng,
+    phần password còn không được gửi đi ở nhánh wireless); kèm `no_reboot:true` để nhận được ack
+    `configSaved` thay vì bị device reboot trước khi kịp xác nhận.
+  - `AzED/AzEM/AzES/AzDi` (+ `Al…`) **không kèm** `AzAN/AlAN/AAll` → `saveConfig{align:{…}}`
+    (ghi FRAM, **không chạy motor**) — trước đây bị dịch thành lệnh `align` nên **chỉ gõ số vào ô
+    sai số trên dock cũng làm mount quay**; nay đúng như Serial.
+  - `AzAN/AlAN/AAll` → `align{ra_error,dec_error,simultaneous}` (chỉ chạy trục được kích hoạt;
+    nếu lệnh không kèm giá trị thì dùng giá trị đang lưu trong device, đúng như Serial).
+  - `ApplyConf` → `applyConfig` với toàn bộ cài đặt hiện tại.
+  - `Home` (read-only), `STAi` (firmware bỏ qua), `APma`/`STAm`/`Scal`/`WSta`/`AzPH`/`AlPH`
+    (chỉ-telemetry) → không gửi, **không còn log warning nhiễu**.
+- **Telemetry (JSON → text)**: bổ sung các token còn thiếu so với đường Serial — `Scal`, sai số align
+  (`AzED/AzEM/AzES/AzDi/AlED/AlEM/AlES/AlDi`), `APma`, `STAs`/`STAm`/`STAi`; đồng thời định dạng số
+  khớp `snprintf` của firmware (`AzL1:%.1f`, `AzSD:%.5f`, `AzES:%.2f`…) để dock/TPPA nhận đúng kiểu.
+- **Cache snapshot cấu hình** mở rộng: `limits`, `motor`, `backlash`, `wifi_ap`, `serial`, `align`,
+  `align_mode` + các giá trị cấp cao nhất (`ssid`, `ip`, `sta_mac`) — làm phẳng theo khoá `cha.con`
+  (`align.az.d`) nên thêm cài đặt mới ở firmware chỉ cần thêm 1 tên section + 1 dòng `AddToken`.
+- **Cài đặt luôn đồng bộ 2 chiều**: firmware nay push lại toàn bộ cấu hình (`config_pushed`)
+  mỗi khi cấu hình thay đổi (từ web, từ plugin hoặc từ Serial), nên plugin không còn giữ bản cache
+  cũ đọc từ lúc kết nối.
+- **Alarm qua Wireless**: firmware sửa gate ERROR telemetry (gửi WebSocket trước/độc lập với
+  buffer TX của UART) → bảng **Alarm History của plugin đã hiện đầy đủ như khi dùng cáp Serial**;
+  mốc so sánh được reset ngay sau handshake nên plugin nhận ngay trạng thái lỗi đang tồn tại.
+
+**Files:** `MLAstroRPA-navigation/Services/MlastroWebSocketService.cs`,
+`MLAstroRPA-navigation/Plugin/MLAstroController.cs`
+
+### MLAstroRPA — Wireless: một sự việc chỉ còn MỘT thông báo (hết toast `alert` trùng)
+
+- Bấm/giữ jog khi chạm soft-limit qua **Wireless** hiện **2 hộp thoại** cho cùng một sự việc:
+  `alert` của firmware (`⚠ Soft Limit Reached! AZ axis stopped at configured limit.`) và cảnh báo
+  sinh từ mã lỗi trong ERROR telemetry (`AzSL` → `AZ soft limit reached`). Đường **Serial** chỉ có
+  kênh mã lỗi nên vẫn chỉ 1 thông báo.
+- Nay các `alert` **liên quan giới hạn** (soft/hard limit, align/relative bị từ chối — luôn đi kèm
+  mã lỗi `AzSL/AlSL/AzHL/AlHL/RfJog*/RfAln*`) **không toast riêng** nữa; kênh mã lỗi được giữ làm
+  nguồn thông báo duy nhất vì đây là kênh có ở **mọi** môi trường điều khiển → câu chữ và số lượng
+  thông báo giống nhau dù dùng cáp hay Wireless.
+- Nội dung `alert` chi tiết hơn (vd hướng cần nhấn để thoát hard-limit) **vẫn được ghi** vào file log
+  NINA như trước; mọi `alert` khác (System Locked, Motion is active, Factory Zero, OTA, Ignored
+  Align…) vẫn toast bình thường.
+
+**Files:** `MLAstroRPA-navigation/Services/MlastroWebSocketService.cs`
+
+### MLAstroRPA — Alarm History: cảnh báo mới nhất nằm trên cùng
+
+- Bảng **Alarm History** trong dock nay chèn dòng mới lên **đầu** danh sách — alarm mới nhất ở trên,
+  cũ dần xuống dưới — cùng thứ tự với bảng System log của plugin và bảng Log của web UI. Trước đây
+  dòng mới được thêm vào cuối nên cảnh báo vừa xảy ra nằm dưới đáy bảng, phải kéo xuống mới thấy.
+- Quá 100 dòng thì bỏ dòng **cũ nhất** (nay ở cuối bảng); dòng đã hết cảnh báo (có giờ *Cleared*) vẫn
+  giữ nguyên vị trí để không nhảy hàng, nút `🗑 CLEAR` không đổi.
+
+**Files:** `MLAstroRPA-navigation/Dockables/PolarAlignmentDockVM.cs`,
+`MLAstroRPA-navigation/Dockables/PolarAlignmentDockable.xaml`
 
 ## 2.0.2.0
 

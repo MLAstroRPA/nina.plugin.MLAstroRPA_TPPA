@@ -163,6 +163,7 @@ namespace MLAstro_Robotic_Polar_Alignment.Dockables
         /// Industrial-HMI-style alarm history. Each row is a driver error/warning code that
         /// became active at <see cref="DriverAlarm.ActivatedAt"/> and, once cleared, shows
         /// the end time on the SAME row via <see cref="DriverAlarm.ClearedAt"/>.
+        /// Thứ tự hiển thị: **mới nhất trên cùng**, cũ dần xuống dưới (xem OnErrorStateChanged).
         /// </summary>
         public ObservableCollection<DriverAlarm> AlarmHistory => _alarmHistory;
 
@@ -986,14 +987,16 @@ namespace MLAstro_Robotic_Polar_Alignment.Dockables
                 }
 
                 var alarm = new DriverAlarm(kv.Key, DriverErrorState.Describe(kv.Key), kv.Value);
-                _alarmHistory.Add(alarm);
+                // Chèn lên ĐẦU danh sách: alarm mới nhất nằm trên cùng, alarm cũ hơn xuống dưới.
+                // (DataGrid khoá sắp xếp CanUserSortColumns=False → hiển thị đúng thứ tự này.)
+                _alarmHistory.Insert(0, alarm);
                 NotifyAlarm(alarm);
             }
 
-            // Keep history bounded (trim oldest first)
+            // Keep history bounded — bỏ dòng CŨ NHẤT (nay nằm ở cuối danh sách)
             while (_alarmHistory.Count > AlarmHistoryMaxEntries)
             {
-                _alarmHistory.RemoveAt(0);
+                _alarmHistory.RemoveAt(_alarmHistory.Count - 1);
             }
 
             HasActiveErrors = state.HasErrors;

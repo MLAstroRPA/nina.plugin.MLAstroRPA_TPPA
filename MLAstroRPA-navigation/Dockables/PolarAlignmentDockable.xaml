@@ -532,7 +532,8 @@
             </Expander>
 
             <!-- Alarm History (industrial HMI style): only ERROR/WARNING codes are shown; each row
-                 carries the activation time and, once cleared, the end time on the SAME row. -->
+                 carries the activation time and, once cleared, the end time on the SAME row.
+                 Newest alarm on TOP, older ones below (same order as the System log panels). -->
             <Expander Header="⚠️ Alarm History" IsExpanded="True" Margin="0,0,0,10"
                       Visibility="{Binding AlarmHistoryVisibility}">
                 <StackPanel Margin="6">

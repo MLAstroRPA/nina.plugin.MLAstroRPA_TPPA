@@ -49,10 +49,21 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
         private TaskCompletionSource<bool>? _handshakeTcs;
         private TaskCompletionSource<string>? _configAckTcs;
         private readonly Dictionary<string, Dictionary<string, object>> _snapshotSections = new(StringComparer.OrdinalIgnoreCase);
+        // Giá trị cấu hình nằm ở CẤP CAO NHẤT của frame (không thuộc section nào) - vd thông tin STA
+        // (ssid/ip/sta_mac) vì firmware giữ tên cũ cho web UI đọc.
+        private readonly Dictionary<string, object> _snapshotScalars = new(StringComparer.OrdinalIgnoreCase);
+        // Sai số align (d/m/s + hướng) gần nhất plugin BIẾT: dùng khi lệnh align chỉ có cờ kích hoạt
+        // (AzAN/AlAN/AAll) hoặc khi lệnh ghi chỉ gửi 1 phần trường — giống Serial (firmware dùng/giữ
+        // giá trị đã lưu trong FRAM).
+        private (int D, int M, double S, bool Dir)? _alignAzParts;
+        private (int D, int M, double S, bool Dir)? _alignAltParts;
         private DateTime _lastAlignSentUtc = DateTime.MinValue;
         private bool _alignInFlight;
         private bool _sawBusySinceAlign;
         private int _speedLevelFromSnapshot = 3;
+        // Phiên bản firmware đã log lần cuối: frame `config_pushed` cũng mang `fw_ver` nên nếu không
+        // so sánh thì mỗi lần đổi cài đặt lại ghi thêm 1 dòng "Firmware: …" vào System log.
+        private string? _firmwareVersionFromSnapshot;
 
         // Trạng thái "chế độ" của dock (JoRe/ReDe/ReAM/ReAS chỉ có ở giao thức serial):
         // WebSocket không có lệnh tương đương nên phải ghi nhớ để dịch đúng arrow-press
@@ -463,10 +474,23 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
                 {
                     // Web UI hiện `alert` bằng MODAL và KHÔNG ghi vào bảng System log (xem
                     // data/script.js: showModal('System Message', data.alert) — không gọi appendLog).
-                    // Plugin giữ đúng tương đương: toast NINA + file NINA log, KHÔNG đưa vào System log
-                    // → bảng System log của plugin luôn giống hệt bảng System Log của Web UI.
+                    // Plugin giữ đúng tương đương: file NINA log (và toast, xem dưới), KHÔNG đưa vào
+                    // System log → bảng System log của plugin luôn giống hệt bảng System Log của Web UI.
                     AppendLog($"ALERT: {alert}");
-                    try { Notification.ShowWarning($"MLAstro RPA: {alert}"); } catch { }
+
+                    // Cảnh báo LIÊN QUAN GIỚI HẠN (soft/hard limit, align/relative bị từ chối) KHÔNG
+                    // toast nữa: firmware đã báo CÙNG một sự việc bằng mã lỗi trong ERROR telemetry
+                    // (AzSL/AlSL/AzHL/AlHL/RfJog*/RfAln*) → trước đây bấm jog vào soft-limit hiện 2 hộp
+                    // thoại ("Soft Limit Reached! AZ axis stopped at configured limit." của `alert` và
+                    // "AZ soft limit reached" của mã lỗi AzSL).
+                    // Kênh mã lỗi được chọn vì đây mới là kênh có ở MỌI môi trường điều khiển (Serial
+                    // không có `alert`) → câu chữ + số lượng thông báo giống nhau dù dùng cáp hay WS.
+                    // Nội dung `alert` chi tiết hơn (vd hướng cần nhấn để thoát hard-limit) vẫn được
+                    // ghi vào file log NINA qua AppendLog ở trên.
+                    if (!IsLimitAlert(alert))
+                    {
+                        try { Notification.ShowWarning($"MLAstro RPA: {alert}"); } catch { }
+                    }
                 }
 
                 // 1) Handshake result
@@ -521,14 +545,16 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
                     }
                 }
 
-                // 3) Init snapshot (chỉ có ở lần gửi đầu) → cache các section cấu hình
+                // 3) Snapshot cấu hình: frame đầu tiên sau khi kết nối VÀ mọi frame `config_pushed`
+                //    (firmware push lại khi cấu hình đổi từ bất kỳ đường nào) → luôn cache lại.
                 if (TryGetInt(root, "speedLevel", out _) || TryGetString(root, "fw_ver", out _))
                 {
                     CacheSnapshotSections(root);
                     ApplyRelativeState(root); // Jog/Relative đang lưu trên device là nguồn sự thật
                     ApplyWifiCredentialsFromSnapshot(root);
-                    if (TryGetString(root, "fw_ver", out var fw))
+                    if (TryGetString(root, "fw_ver", out var fw) && fw != _firmwareVersionFromSnapshot)
                     {
+                        _firmwareVersionFromSnapshot = fw;
                         _serial.SetWirelessFirmwareVersion(fw);
                         AppendLog($"Firmware: {fw}");
                     }
@@ -627,6 +653,17 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
             }
         }
 
+        /// <summary>
+        /// Section cấu hình của frame snapshot/broadcast được cache để TỔNG HỢP TELEMETRY và để tra cứu
+        /// khi dịch lệnh. PHẢI khớp với fillConfigSections() bên firmware; thêm cài đặt mới ở firmware
+        /// thì thêm tên section ở đây (+ token tương ứng trong AppendSnapshotTokens).
+        /// </summary>
+        private static readonly string[] SnapshotSectionNames =
+            { "limits", "motor", "backlash", "wifi_ap", "serial", "align", "align_mode" };
+
+        /// <summary>Giá trị cấp cao nhất của frame snapshot cần cho telemetry text (thông tin STA).</summary>
+        private static readonly string[] SnapshotScalarNames = { "ssid", "ip", "sta_mac", "pass" };
+
         private void CacheSnapshotSections(JsonElement root)
         {
             if (TryGetInt(root, "speedLevel", out var speedLevel))
@@ -634,24 +671,72 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
                 _speedLevelFromSnapshot = speedLevel;
             }
 
-            foreach (var name in new[] { "limits", "motor", "backlash", "wifi_ap" })
+            foreach (var name in SnapshotSectionNames)
             {
                 if (!root.TryGetProperty(name, out var section) || section.ValueKind != JsonValueKind.Object) continue;
                 var dict = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
-                foreach (var prop in section.EnumerateObject())
-                {
-                    dict[prop.Name] = prop.Value.ValueKind switch
-                    {
-                        JsonValueKind.True => true,
-                        JsonValueKind.False => false,
-                        JsonValueKind.Number => prop.Value.TryGetInt64(out var l) ? l : prop.Value.GetDouble(),
-                        JsonValueKind.String => prop.Value.GetString() ?? string.Empty,
-                        _ => string.Empty
-                    };
-                }
+                FlattenJson(section, string.Empty, dict);
                 _snapshotSections[name] = dict;
             }
+
+            foreach (var name in SnapshotScalarNames)
+            {
+                if (!root.TryGetProperty(name, out var scalar)) continue;
+                _snapshotScalars[name] = ToPlainValue(scalar);
+            }
+
+            // Sai số align đang LƯU trong thiết bị là nguồn sự thật (dùng khi lệnh align không kèm giá trị).
+            if (_snapshotSections.TryGetValue("align", out var alignSnap))
+            {
+                _alignAzParts = AlignPartsFromSection(alignSnap, "az");
+                _alignAltParts = AlignPartsFromSection(alignSnap, "alt");
+            }
         }
+
+        /// <summary>Làm phẳng một object JSON thành "key" hoặc "cha.con" để tra cứu đơn giản.</summary>
+        private static void FlattenJson(JsonElement obj, string prefix, Dictionary<string, object> into)
+        {
+            foreach (var prop in obj.EnumerateObject())
+            {
+                var key = prefix.Length == 0 ? prop.Name : prefix + "." + prop.Name;
+                if (prop.Value.ValueKind == JsonValueKind.Object)
+                {
+                    FlattenJson(prop.Value, key, into);
+                }
+                else if (prop.Value.ValueKind != JsonValueKind.Array)
+                {
+                    into[key] = ToPlainValue(prop.Value);
+                }
+            }
+        }
+
+        private static object ToPlainValue(JsonElement value) => value.ValueKind switch
+        {
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            JsonValueKind.Number => value.TryGetInt64(out var l) ? l : value.GetDouble(),
+            JsonValueKind.String => value.GetString() ?? string.Empty,
+            _ => string.Empty
+        };
+
+        /// <summary>Sai số align (d/m/s + hướng) từ section "align" đã cache: {az:{d,m,s,dir}}.</summary>
+        private static (int D, int M, double S, bool Dir)? AlignPartsFromSection(Dictionary<string, object> align, string axis)
+        {
+            if (!align.ContainsKey(axis + ".d") && !align.ContainsKey(axis + ".s")) return null;
+            var d = ParseDecimal(Get(align, axis + ".d"));
+            var m = ParseDecimal(Get(align, axis + ".m"));
+            var s = ParseDecimal(Get(align, axis + ".s"));
+            var dir = Get(align, axis + ".dir") != "0";
+            return ((int)d, (int)m, s, dir);
+        }
+
+        private static double ParseDecimal(string value)
+            => double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var d) ? d : 0;
+
+        private string GetScalar(string name)
+            => _snapshotScalars.TryGetValue(name, out var v)
+                ? Convert.ToString(v, CultureInfo.InvariantCulture) ?? string.Empty
+                : string.Empty;
 
         /// <summary>Tổng hợp telemetry JSON thành đúng định dạng text của firmware serial.</summary>
         private string BuildSerialTelemetryLine(JsonElement root)
@@ -661,6 +746,8 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
             var movedAlt = TryGetDouble(root, "align_moved_alt", out var alt) ? alt : 0;
 
             var tokens = new List<string>();
+            // Scal:1 = hệ số scale của khung telemetry đầy đủ (giống firmware serial).
+            AddToken(tokens, "Scal", "1");
             AddToken(tokens, "SLvl", _speedLevelFromSnapshot.ToString(CultureInfo.InvariantCulture));
             AddToken(tokens, "WSta", TryGetDouble(root, "rssi", out var rssi) && rssi > -1000 ? "1" : "0");
             AddToken(tokens, "Home", TryGetBool(root, "homed", out var homed) && homed ? "1" : "0");
@@ -685,17 +772,19 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
 
         private void AppendSnapshotTokens(List<string> tokens)
         {
+            // Định dạng số ở đây PHẢI khớp snprintf() của firmware (AzL1:%.1f, AzSD:%.5f,
+            // AzED:%.0f, AzES:%.2f...) để dock/driver TPPA nhận đúng kiểu dữ liệu như khi dùng cáp Serial.
             if (_snapshotSections.TryGetValue("limits", out var limits))
             {
-                AddToken(tokens, "AzL1", Get(limits, "az_min"));
-                AddToken(tokens, "AzL2", Get(limits, "az_max"));
-                AddToken(tokens, "AlL1", Get(limits, "alt_min"));
-                AddToken(tokens, "AlL2", Get(limits, "alt_max"));
+                AddToken(tokens, "AzL1", Format(limits, "az_min", "0.#"));
+                AddToken(tokens, "AzL2", Format(limits, "az_max", "0.#"));
+                AddToken(tokens, "AlL1", Format(limits, "alt_min", "0.#"));
+                AddToken(tokens, "AlL2", Format(limits, "alt_max", "0.#"));
             }
 
             if (_snapshotSections.TryGetValue("motor", out var motor))
             {
-                AddToken(tokens, "AzRD", BoolToken(Get(motor, "az_reverse")));
+                AddToken(tokens, "AzRD", Format(motor, "az_reverse", "1"));
                 AddToken(tokens, "AzIR", Get(motor, "az_run_ma"));
                 AddToken(tokens, "AzIH", Get(motor, "az_hold_ma"));
                 AddToken(tokens, "AzSB", Get(motor, "az_boost_pct"));
@@ -703,9 +792,9 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
                 AddToken(tokens, "AzMS", Get(motor, "az_microsteps"));
                 AddToken(tokens, "AzAc", Get(motor, "az_accel"));
                 AddToken(tokens, "AzDec", Get(motor, "az_decel"));
-                AddToken(tokens, "AzSD", Get(motor, "az_spd"));
-                AddToken(tokens, "AzRM", BoolToken(Get(motor, "az_spread_cycle")));
-                AddToken(tokens, "AlRD", BoolToken(Get(motor, "alt_reverse")));
+                AddToken(tokens, "AzSD", Format(motor, "az_spd", "0.#####"));
+                AddToken(tokens, "AzRM", Format(motor, "az_spread_cycle", "1"));
+                AddToken(tokens, "AlRD", Format(motor, "alt_reverse", "1"));
                 AddToken(tokens, "AlIR", Get(motor, "alt_run_ma"));
                 AddToken(tokens, "AlIH", Get(motor, "alt_hold_ma"));
                 AddToken(tokens, "AlSB", Get(motor, "alt_boost_pct"));
@@ -713,18 +802,18 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
                 AddToken(tokens, "AlMS", Get(motor, "alt_microsteps"));
                 AddToken(tokens, "AlAc", Get(motor, "alt_accel"));
                 AddToken(tokens, "AlDe", Get(motor, "alt_decel"));
-                AddToken(tokens, "AlSD", Get(motor, "alt_spd"));
-                AddToken(tokens, "AlRM", BoolToken(Get(motor, "alt_spread_cycle")));
+                AddToken(tokens, "AlSD", Format(motor, "alt_spd", "0.#####"));
+                AddToken(tokens, "AlRM", Format(motor, "alt_spread_cycle", "1"));
             }
 
             if (_snapshotSections.TryGetValue("backlash", out var backlash))
             {
-                AddToken(tokens, "Back", BoolToken(Get(backlash, "enable")));
+                AddToken(tokens, "Back", Format(backlash, "enable", "1"));
                 AddToken(tokens, "AzBl", Get(backlash, "az_steps"));
                 AddToken(tokens, "AlBl", Get(backlash, "alt_steps"));
-                AddToken(tokens, "Over", BoolToken(Get(backlash, "overshoot")));
-                AddToken(tokens, "OvUp", BoolToken(Get(backlash, "overshoot_up")));
-                AddToken(tokens, "OvDn", BoolToken(Get(backlash, "overshoot_down")));
+                AddToken(tokens, "Over", Format(backlash, "overshoot", "1"));
+                AddToken(tokens, "OvUp", Format(backlash, "overshoot_up", "1"));
+                AddToken(tokens, "OvDn", Format(backlash, "overshoot_down", "1"));
                 AddToken(tokens, "OvD", Get(backlash, "overshoot_d"));
                 AddToken(tokens, "OvM", Get(backlash, "overshoot_m"));
                 AddToken(tokens, "OvS", Get(backlash, "overshoot_s"));
@@ -733,18 +822,45 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
             if (_snapshotSections.TryGetValue("wifi_ap", out var ap))
             {
                 AddToken(tokens, "APss", Get(ap, "ssid"));
+                AddToken(tokens, "APma", Get(ap, "mac"));
                 AddToken(tokens, "APip", Get(ap, "ip"));
                 AddToken(tokens, "APsu", Get(ap, "subnet"));
             }
+
+            // Thông tin STA nằm ở CẤP CAO NHẤT của frame (firmware giữ tên cũ ip/ssid cho web UI).
+            AddToken(tokens, "STAs", GetScalar("ssid"));
+            AddToken(tokens, "STAm", GetScalar("sta_mac"));
+            AddToken(tokens, "STAi", GetScalar("ip"));
+
+            // Sai số align đang LƯU trong thiết bị (AzED/AzEM/AzES/AzDi + Al...). Không có thì các ô
+            // nhập sai số trên dock/driver TPPA sẽ trắng sau mỗi gói telemetry.
+            if (_snapshotSections.TryGetValue("align", out var align))
+            {
+                AddToken(tokens, "AzED", Format(align, "az.d", "0"));
+                AddToken(tokens, "AzEM", Format(align, "az.m", "0"));
+                AddToken(tokens, "AzES", Format(align, "az.s", "0.##"));
+                AddToken(tokens, "AzDi", Format(align, "az.dir", "1"));
+                AddToken(tokens, "AlED", Format(align, "alt.d", "0"));
+                AddToken(tokens, "AlEM", Format(align, "alt.m", "0"));
+                AddToken(tokens, "AlES", Format(align, "alt.s", "0.##"));
+                AddToken(tokens, "AlDi", Format(align, "alt.dir", "1"));
+            }
         }
 
-        private static string BoolToken(object? value) => value switch
+        /// <summary>
+        /// Định dạng giá trị trong dict theo mẫu số của firmware ("0.#" = %.1f, "0.#####" = %.5f,
+        /// "1" = cờ 0/1). Giá trị không phải số (ssid/ip/mac) giữ nguyên.
+        /// </summary>
+        private static string Format(Dictionary<string, object> d, string key, string format)
         {
-            bool b => b ? "1" : "0",
-            long l => l != 0 ? "1" : "0",
-            string s => (s == "1" || s.Equals("true", StringComparison.OrdinalIgnoreCase)) ? "1" : "0",
-            _ => "0"
-        };
+            if (!d.TryGetValue(key, out var v) || v == null) return string.Empty;
+            if (v is bool b) return b ? "1" : "0";
+            var s = Convert.ToString(v, CultureInfo.InvariantCulture);
+            if (string.IsNullOrWhiteSpace(s)) return string.Empty;
+            return double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var num)
+                ? num.ToString(format, CultureInfo.InvariantCulture)
+                : s;
+        }
 
         private static string Get(Dictionary<string, object> d, string key)
             => d.TryGetValue(key, out var v) ? Convert.ToString(v, CultureInfo.InvariantCulture) ?? string.Empty : string.Empty;
@@ -877,11 +993,21 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
             var payload = BuildConfigPayload(tokens);
             if (payload.Count == 0)
             {
-                AppendLog("NOTE: no WS-supported config keys in payload (WiFi/AP settings require Serial).");
+                AppendLog("NOTE: no WS-supported config keys in payload.");
                 return false;
             }
 
             var command = hasSaveAndReboot ? "saveConfig" : "applyConfig";
+
+            // WiFi (STA) / WiFi (AP) chỉ ghi được vào FRAM bằng saveConfig, và firmware sẽ TỰ REBOOT
+            // ngay sau khi lưu nếu không có no_reboot → client không bao giờ nhận được ack configSaved.
+            // Vì vậy luôn gửi kèm no_reboot:true rồi tự gửi lệnh reboot sau khi đã xác nhận (giống
+            // cách web UI làm), tránh reboot khi chưa chắc đã lưu xong.
+            if (command == "saveConfig" && payload.Keys.Any(IsSaveOnlySection))
+            {
+                payload["no_reboot"] = true;
+            }
+
             var jsonBody = JsonSerializer.Serialize(new { cmd = command, data = payload });
 
             _configAckTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -941,7 +1067,22 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
             ["OvD"] = ("backlash", "overshoot_d", false),
             ["OvM"] = ("backlash", "overshoot_m", false),
             ["OvS"] = ("backlash", "overshoot_s", false),
+
+            // WiFi (AP) & WiFi (STA): firmware nhận 2 nhóm này trong saveConfig (ghi FRAM + reboot),
+            // tương đương các lệnh APss/APpa/APip/APsu/STAs/STAp của giao thức Serial.
+            // TRƯỚC ĐÂY bị bỏ qua → đổi WiFi/AP bằng Wireless không có tác dụng.
+            ["APss"] = ("wifi_ap", "ssid", false),
+            ["APpa"] = ("wifi_ap", "pass", false),
+            ["APip"] = ("wifi_ap", "ip", false),
+            ["APsu"] = ("wifi_ap", "subnet", false),
+            ["STAs"] = ("wifi", "ssid", false),
+            ["STAp"] = ("wifi", "pass", false),
         };
+
+        /// <summary>Nhóm cấu hình chỉ áp dụng được khi LƯU (saveConfig) — WiFi/AP.</summary>
+        private static bool IsSaveOnlySection(string section)
+            => section.Equals("wifi", StringComparison.OrdinalIgnoreCase)
+               || section.Equals("wifi_ap", StringComparison.OrdinalIgnoreCase);
 
         private Dictionary<string, object> BuildConfigPayload(Dictionary<string, string> tokens)
         {
@@ -1093,25 +1234,76 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
                 return outgoing;
             }
 
-            // ALIGN (AzED/AzEM/AzES/AzDi + AlED/... + AAll:1|AzAN:1|AlAN:1)
-            var isAlign = tokens.ContainsKey("AAll") || tokens.ContainsKey("AzAN") || tokens.ContainsKey("AlAN")
-                          || tokens.ContainsKey("AzED") || tokens.ContainsKey("AlED");
-            if (isAlign)
+            // ---- ALIGN ----
+            // Giao thức Serial tách làm 2 việc khác hẳn nhau:
+            //   (a) AzED/AzEM/AzES/AzDi (+ Al...) = GHI giá trị sai số vào FRAM, KHÔNG chạy motor.
+            //       Dock gửi dòng này mỗi khi người dùng sửa ô nhập sai số.
+            //   (b) AzAN:1 / AlAN:1 / AAll:1    = KÍCH HOẠT dịch chuyển theo giá trị đã ghi.
+            // WebSocket tương đương: (a) saveConfig{align:{...}}  (b) align{ra_error,dec_error,simultaneous}.
+            // Trước đây gộp cả hai thành lệnh `align` → chỉ gõ số vào ô sai số cũng làm mount quay.
+            var setterAz = AlignAzSetterKeys.Any(tokens.ContainsKey);
+            var setterAlt = AlignAltSetterKeys.Any(tokens.ContainsKey);
+            var triggerAz = tokens.ContainsKey("AAll") || tokens.ContainsKey("AzAN");
+            var triggerAlt = tokens.ContainsKey("AAll") || tokens.ContainsKey("AlAN");
+
+            if (setterAz || setterAlt || triggerAz || triggerAlt)
             {
-                var azArcSec = ToArcSeconds(tokens, "Az");
-                var altArcSec = ToArcSeconds(tokens, "Al");
-                var simultaneous = tokens.ContainsKey("AAll") || (azArcSec != 0 && altArcSec != 0);
-                var json = $"{{\"cmd\":\"align\",\"data\":{{\"ra_error\":{azArcSec.ToString("0.###", CultureInfo.InvariantCulture)}," +
-                           $"\"dec_error\":{altArcSec.ToString("0.###", CultureInfo.InvariantCulture)}," +
-                           $"\"simultaneous\":{(simultaneous ? "true" : "false")}}}}}";
-                outgoing.Add(json);
-                _lastAlignSentUtc = DateTime.UtcNow;
-                _alignInFlight = true;
-                _sawBusySinceAlign = false;
+                // Sai số của TỪNG trục = token vừa gửi (nếu có) + giá trị còn lại đang lưu trong thiết bị.
+                // Giao thức Serial ghi từng trường riêng lẻ (AzED/AzEM/AzES/AzDi đều ghi FRAM ngay) nên
+                // gửi thiếu trường nào thì trường đó phải giữ nguyên, không được xoá về 0.
+                var az = MergeAlignParts(tokens, "Az", _alignAzParts);
+                var alt = MergeAlignParts(tokens, "Al", _alignAltParts);
+                _alignAzParts = az;
+                _alignAltParts = alt;
+
+                if (setterAz || setterAlt)
+                {
+                    var saveAlign = new
+                    {
+                        origin = "pcPlugin",
+                        align = new
+                        {
+                            az = new { d = az.D, m = az.M, s = az.S, dir = az.Dir },
+                            alt = new { d = alt.D, m = alt.M, s = alt.S, dir = alt.Dir }
+                        }
+                    };
+                    outgoing.Add(JsonSerializer.Serialize(new { cmd = "saveConfig", data = saveAlign }));
+                }
+
+                if (triggerAz || triggerAlt)
+                {
+                    // Trục không được kích hoạt thì gửi 0 để firmware không đụng tới trục đó
+                    // (đúng như Serial: AzAN chỉ chạy AZ, AlAN chỉ chạy ALT).
+                    var azArcSec = triggerAz ? AlignArcSeconds(az) : 0;
+                    var altArcSec = triggerAlt ? AlignArcSeconds(alt) : 0;
+                    var simultaneous = tokens.ContainsKey("AAll") || (triggerAz && triggerAlt);
+                    var json = $"{{\"cmd\":\"align\",\"data\":{{\"ra_error\":{azArcSec.ToString("0.###", CultureInfo.InvariantCulture)}," +
+                               $"\"dec_error\":{altArcSec.ToString("0.###", CultureInfo.InvariantCulture)}," +
+                               $"\"simultaneous\":{(simultaneous ? "true" : "false")}}}}}";
+                    outgoing.Add(json);
+                    _lastAlignSentUtc = DateTime.UtcNow;
+                    _alignInFlight = true;
+                    _sawBusySinceAlign = false;
+                }
                 return outgoing;
             }
 
-            // Cấu hình: gửi thẳng applyConfig (không chờ ack ở đường Send đồng bộ)
+            // ApplyConf (Serial: nạp cấu hình đang có trong RAM vào phần cứng) → WebSocket không có lệnh
+            // "apply tất cả", nên gửi applyConfig với TOÀN BỘ cài đặt hiện tại của plugin.
+            if (tokens.ContainsKey("ApplyConf"))
+            {
+                var fullPayload = BuildConfigPayload(ParseCommandLine(
+                    _serial.BuildConfigurationCommand(_settings, includeSaveAndReboot: false)));
+                if (fullPayload.Count > 0)
+                {
+                    outgoing.Add(JsonSerializer.Serialize(new { cmd = "applyConfig", data = fullPayload }));
+                }
+                return outgoing;
+            }
+
+            // Cấu hình: gửi thẳng applyConfig (không chờ ack ở đường Send đồng bộ).
+            // Lưu ý: nhóm WiFi/AP đi qua đây sẽ bị firmware bỏ qua kèm cảnh báo
+            // "[SAVE&REBOOT required]" — đúng như hành vi của web UI khi bấm APPLY.
             if (tokens.Keys.Any(k => ConfigKeyMap.ContainsKey(k)))
             {
                 var payload = BuildConfigPayload(tokens);
@@ -1122,9 +1314,52 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
                 return outgoing;
             }
 
+            // Lệnh chỉ-đọc hoặc không có tương đương ở WebSocket: firmware Serial cũng bỏ qua
+            // (Home là read-only, STAi bị bỏ qua, APma/STAm/Scal/WSta/AzPH/AlPH chỉ là telemetry)
+            // → không gửi gì và KHÔNG báo lỗi để tránh nhiễu log.
+            if (tokens.Keys.All(k => ReadOnlyTelemetryKeys.Contains(k)))
+            {
+                return outgoing;
+            }
+
             AppendLog($"WARNING: command not supported over Wireless: {string.Join(",", tokens.Keys)}");
             return outgoing;
         }
+
+        private static readonly string[] AlignAzSetterKeys = { "AzED", "AzEM", "AzES", "AzDi" };
+        private static readonly string[] AlignAltSetterKeys = { "AlED", "AlEM", "AlES", "AlDi" };
+
+        /// <summary>Từ/khoá chỉ có ở telemetry (hoặc bị firmware bỏ qua) — không cần dịch, không báo lỗi.</summary>
+        private static readonly HashSet<string> ReadOnlyTelemetryKeys = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "Home", "STAi", "APma", "STAm", "Scal", "WSta", "AzPH", "AlPH", "Mpos"
+        };
+
+        /// <summary>Tách sai số align (arcsec, có dấu) thành d/m/s + dir đúng như giao thức Serial.</summary>
+        private static (int D, int M, double S, bool Dir) MergeAlignParts(
+            Dictionary<string, string> tokens, string prefix, (int D, int M, double S, bool Dir)? fallback)
+        {
+            var fallbackValue = fallback ?? (0, 0, 0.0, true);
+
+            double? Token(string name) => tokens.TryGetValue(name, out var raw) ? ParseDecimal(raw) : null;
+            var dRaw = Token(prefix + "ED");
+            var mRaw = Token(prefix + "EM");
+            var sRaw = Token(prefix + "ES");
+            bool? dirRaw = tokens.TryGetValue(prefix + "Di", out var dirStr) ? dirStr != "0" : null;
+
+            // Firmware: giá trị âm = đảo hướng, phần số lấy trị tuyệt đối (xem handleSerialCommand).
+            var negative = (dRaw ?? 0) < 0 || (mRaw ?? 0) < 0 || (sRaw ?? 0) < 0;
+
+            var d = dRaw.HasValue ? (int)Math.Abs(dRaw.Value) : fallbackValue.D;
+            var m = mRaw.HasValue ? Math.Abs(mRaw.Value) : fallbackValue.M;
+            var s = sRaw.HasValue ? Math.Abs(sRaw.Value) : fallbackValue.S;
+            var dir = dirRaw ?? (negative ? false : fallbackValue.Dir);
+            return (d, (int)m, s, dir);
+        }
+
+        /// <summary>Sai số align có dấu (arcsec) từ d/m/s + hướng — dùng cho lệnh align của WebSocket.</summary>
+        private static double AlignArcSeconds((int D, int M, double S, bool Dir) parts)
+            => ((parts.D * 3600.0) + (parts.M * 60.0) + parts.S) * (parts.Dir ? 1 : -1);
 
         /// <summary>
         /// Dịch một lần nhấn/nhả nút mũi tên của dock thành lệnh WebSocket.
@@ -1173,30 +1408,19 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
         private static int ParseIntOrZero(string value)
             => int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) ? parsed : 0;
 
+        /// <summary>
+        /// `alert` có liên quan giới hạn chuyển động (soft/hard limit, align/relative bị từ chối) hay
+        /// không — các cảnh báo này LUÔN đi kèm một mã lỗi trong ERROR telemetry nên không toast riêng
+        /// (xem chú thích tại nhánh xử lý `alert` trong HandleIncoming).
+        /// </summary>
+        private static bool IsLimitAlert(string alert)
+            => alert.Contains("limit", StringComparison.OrdinalIgnoreCase);
+
         /// <summary>Đưa một dòng trả lời "như từ thiết bị" vào pipeline (và cho adapter ISerialLink).</summary>
         private void InjectDeviceLine(string line)
         {
             try { LineReceived?.Invoke(line); } catch { }
             _serial.InjectIncomingText(line + "\n");
-        }
-
-        private static double ToArcSeconds(Dictionary<string, string> tokens, string prefix)        {
-            var deg = GetDouble(tokens, prefix + "ED");
-            var min = GetDouble(tokens, prefix + "EM");
-            var sec = GetDouble(tokens, prefix + "ES");
-            var magnitude = (deg * 3600.0) + (min * 60.0) + sec;
-            var dirPositive = true;
-            if (tokens.TryGetValue(prefix + "Di", out var dir))
-            {
-                dirPositive = dir != "0";
-            }
-            return dirPositive ? magnitude : -magnitude;
-        }
-
-        private static double GetDouble(Dictionary<string, string> tokens, string key)
-        {
-            if (!tokens.TryGetValue(key, out var value)) return 0;
-            return double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var d) ? d : 0;
         }
 
         private async Task SendJsonAsync(string json, CancellationToken token)

@@ -830,17 +830,30 @@ namespace MLAstro_Robotic_Polar_Alignment.Plugin
             }
 
             // ---- WIRELESS: lưu cấu hình qua WebSocket API (saveConfig + reboot) ----
-            // Lưu ý: SSID/Ip/Subnet của AP và SSID/Password của STA chỉ gửi được qua Serial.
+            // Cùng một dòng lệnh text như đường Serial: translator dịch sang saveConfig
+            // (limits/motor/backlash + wifi_ap/wifi) rồi gửi reboot. Password của AP/STA trước đây
+            // bị bỏ lại phía Serial nên đổi password bằng Wireless không có tác dụng.
             if (IsWirelessTransport)
             {
                 try
                 {
                     var wirelessConfig = _serialConnectionService.BuildConfigurationCommand(Settings);
+                    if (_apPasswordEdited)
+                    {
+                        wirelessConfig = $"APpa:{Settings.ApPass}," + wirelessConfig;
+                    }
+                    if (_staPasswordEdited)
+                    {
+                        wirelessConfig = $"STAp:{Settings.WifiPass}," + wirelessConfig;
+                    }
+
                     var ok = await _webSocketService.SendCommandAndAwaitOkAsync(wirelessConfig);
                     if (!ok)
                     {
                         Logger.Warning("[MLAstro] saveConfig was not acknowledged over wireless");
                     }
+                    _apPasswordEdited = false;
+                    _staPasswordEdited = false;
 
                     _webSocketService.Disconnect();
                     await AutoReconnectAsync(3);
