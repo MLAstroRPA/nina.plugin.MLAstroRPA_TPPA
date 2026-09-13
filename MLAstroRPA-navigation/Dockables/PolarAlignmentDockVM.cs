@@ -26,6 +26,19 @@ namespace MLAstro_Robotic_Polar_Alignment.Dockables
         private System.Timers.Timer? _jogWatchdogTimer;
         private string? _currentJogCommand = null;
         private readonly object _jogLock = new();
+
+        // Khoá RIÊNG từng nút hướng: bật khi firmware TỪ CHỐI lệnh jog vì soft-limit
+        // (ERROR telemetry token `CmdRf` → mã RfJogAz / RfJogAl). Mở lại khi bấm hướng NGƯỢC LẠI
+        // hoặc tự động sau JOG_UNBLOCK_DELAY_MS.
+        private bool _jogAltUpBlocked;
+        private bool _jogAltDownBlocked;
+        private bool _jogAzLeftBlocked;
+        private bool _jogAzRightBlocked;
+        private System.Windows.Threading.DispatcherTimer? _jogUnblockTimer;
+
+        /// <summary>Tự mở khoá nút mũi tên sau bao lâu kể từ lần bị từ chối gần nhất.</summary>
+        private const int JOG_UNBLOCK_DELAY_MS = 2000;
+
         private bool _disposed = false;
 
         // Static instance for cleanup during plugin teardown
@@ -123,6 +136,7 @@ namespace MLAstro_Robotic_Polar_Alignment.Dockables
                 {
                     UpdateStatusColor();
                     OnPropertyChanged(nameof(CanManualControl));
+                    NotifyCanJogChanged();
                     OnPropertyChanged(nameof(CanAutomaticControl));
                     OnPropertyChanged(nameof(CanAlign));
                     OnPropertyChanged(nameof(ResetErrorButtonVisibility));
@@ -164,6 +178,7 @@ namespace MLAstro_Robotic_Polar_Alignment.Dockables
                 if (SetProperty(ref _hasActiveErrors, value))
                 {
                     OnPropertyChanged(nameof(CanManualControl));
+                    NotifyCanJogChanged();
                     OnPropertyChanged(nameof(CanAutomaticControl));
                     OnPropertyChanged(nameof(CanAlign));
                     CommandManager.InvalidateRequerySuggested();
@@ -482,6 +497,7 @@ namespace MLAstro_Robotic_Polar_Alignment.Dockables
                     OnPropertyChanged(nameof(CanModify));
                     OnPropertyChanged(nameof(CanAlign));
                     OnPropertyChanged(nameof(CanManualControl));
+                    NotifyCanJogChanged();
                     OnPropertyChanged(nameof(CanAutomaticControl));
                     Logger.Info($"[MLAstro] Automated adjustment mode: {(value ? "ON" : "OFF")}");
                 }
@@ -498,6 +514,113 @@ namespace MLAstro_Robotic_Polar_Alignment.Dockables
         /// Automated workflows own both axes and therefore disable every movement start control.
         /// </summary>
         public bool CanManualControl => !_isAutomatedAdjustment && !IsAutomaticMotion && !HasActiveErrors && !IsExternalLocked;
+
+        // --- Nút mũi tên (jog): IsEnabled = CanManualControl && chưa bị khoá do firmware từ chối ---
+        public bool CanJogAltUp => CanManualControl && !_jogAltUpBlocked;
+        public bool CanJogAltDown => CanManualControl && !_jogAltDownBlocked;
+        public bool CanJogAzLeft => CanManualControl && !_jogAzLeftBlocked;
+        public bool CanJogAzRight => CanManualControl && !_jogAzRightBlocked;
+
+        /// <summary>Báo cho UI biết trạng thái enable của 4 nút mũi tên có thể đổi.</summary>
+        private void NotifyCanJogChanged()
+        {
+            OnPropertyChanged(nameof(CanJogAltUp));
+            OnPropertyChanged(nameof(CanJogAltDown));
+            OnPropertyChanged(nameof(CanJogAzLeft));
+            OnPropertyChanged(nameof(CanJogAzRight));
+        }
+
+        private void SetJogBlocked(ref bool field, bool blocked, string propertyName)
+        {
+            if (field == blocked) return;
+            field = blocked;
+            OnPropertyChanged(propertyName);
+        }
+
+        /// <summary>Mở khoá cả hai hướng của một trục (gọi khi người dùng bấm lại nút mũi tên).</summary>
+        private void UnblockJogAxis(string axis)
+        {
+            if (axis == "az")
+            {
+                SetJogBlocked(ref _jogAzLeftBlocked, false, nameof(CanJogAzLeft));
+                SetJogBlocked(ref _jogAzRightBlocked, false, nameof(CanJogAzRight));
+            }
+            else
+            {
+                SetJogBlocked(ref _jogAltUpBlocked, false, nameof(CanJogAltUp));
+                SetJogBlocked(ref _jogAltDownBlocked, false, nameof(CanJogAltDown));
+            }
+        }
+
+        /// <summary>Tách lệnh jog text ("MAzL:1") thành trục + chiều: az:-1/+1 = trái/phải, alt:+1/-1 = lên/xuống.</summary>
+        private static (string axis, int direction) ParseJogCommand(string command)
+        {
+            if (command.StartsWith("MAzL", StringComparison.OrdinalIgnoreCase)) return ("az", -1);
+            if (command.StartsWith("MAzR", StringComparison.OrdinalIgnoreCase)) return ("az", 1);
+            if (command.StartsWith("MAlU", StringComparison.OrdinalIgnoreCase)) return ("alt", 1);
+            if (command.StartsWith("MAlD", StringComparison.OrdinalIgnoreCase)) return ("alt", -1);
+            return (string.Empty, 0);
+        }
+
+        /// <summary>
+        /// Hẹn mở khoá nút mũi tên sau JOG_UNBLOCK_DELAY_MS kể từ lần bị từ chối GẦN NHẤT (mỗi lần
+        /// bị từ chối lại dời hẹn). Cảnh báo "trục đang ở biên" là TẠM THỜI — trục có thể đã được đưa
+        /// ra khỏi giới hạn bằng nguồn khác (relative / auto / web) nên không giữ nút khoá vĩnh viễn.
+        /// Dùng DispatcherTimer để Tick chạy ngay trên UI thread (4 property IsEnabled không cần marshal).
+        /// </summary>
+        private void StartJogUnblockTimer()
+        {
+            if (Application.Current?.Dispatcher == null) return;
+
+            if (_jogUnblockTimer == null)
+            {
+                _jogUnblockTimer = new System.Windows.Threading.DispatcherTimer
+                {
+                    Interval = TimeSpan.FromMilliseconds(JOG_UNBLOCK_DELAY_MS)
+                };
+                _jogUnblockTimer.Tick += (s, e) =>
+                {
+                    _jogUnblockTimer?.Stop();
+                    UnblockJogAxis("az");
+                    UnblockJogAxis("alt");
+                    Logger.Info("[MLAstro] Jog buttons auto-unblocked after soft-limit warning");
+                };
+            }
+
+            _jogUnblockTimer.Stop();   // dời hẹn tính từ lần từ chối gần nhất
+            _jogUnblockTimer.Start();
+        }
+
+        /// <summary>
+        /// Firmware TỪ CHỐI lệnh jog vì soft-limit (ERROR telemetry `CmdRf` → RfJogAz / RfJogAl).
+        /// Cách xử lý: KHOÁ đúng nút hướng vừa bấm, nhả nút một lần (gửi "MAzL:0") rồi KHÔNG gửi
+        /// gì nữa — vì khi button bị disable, WPF không phát MouseUp/MouseLeave nên handler nhả nút
+        /// không chạy, phải gọi StopJogMovement() tường minh (nó cũng dừng watchdog 250 ms).
+        /// </summary>
+        private void HandleJogRefused(string axis)
+        {
+            string? cmd;
+            lock (_jogLock) { cmd = _currentJogCommand; }
+            if (string.IsNullOrEmpty(cmd)) return;      // lệnh không phải do plugin này phát ra
+
+            var (jogAxis, direction) = ParseJogCommand(cmd!);
+            if (direction == 0 || !string.Equals(jogAxis, axis, StringComparison.Ordinal)) return;
+
+            if (jogAxis == "az")
+            {
+                if (direction < 0) SetJogBlocked(ref _jogAzLeftBlocked, true, nameof(CanJogAzLeft));
+                else SetJogBlocked(ref _jogAzRightBlocked, true, nameof(CanJogAzRight));
+            }
+            else
+            {
+                if (direction > 0) SetJogBlocked(ref _jogAltUpBlocked, true, nameof(CanJogAltUp));
+                else SetJogBlocked(ref _jogAltDownBlocked, true, nameof(CanJogAltDown));
+            }
+
+            StartJogUnblockTimer();   // tự mở khoá sau 2 s (ngoài cách bấm hướng ngược lại)
+            StopJogMovement();   // gửi ":0" + dừng watchdog + xoá lệnh đang chạy → không gửi gì nữa
+            Logger.Info($"[MLAstro] Jog {axis} bị từ chối (soft limit) → khoá nút hướng, đã nhả jog");
+        }
 
         /// <summary>
         /// Returns true only when the firmware reports both motors are idle.
@@ -519,6 +642,7 @@ namespace MLAstro_Robotic_Polar_Alignment.Dockables
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(CanModify));
                 OnPropertyChanged(nameof(CanManualControl));
+                NotifyCanJogChanged();
                 OnPropertyChanged(nameof(CanAutomaticControl));
                 OnPropertyChanged(nameof(CanAlign));
             }
@@ -605,6 +729,9 @@ namespace MLAstro_Robotic_Polar_Alignment.Dockables
         public ICommand AlignAllCommand { get; }
         public ICommand ToggleModifyCommand { get; }
 
+        /// <summary>Xoá bảng Alarm History (thao tác của người dùng, không ảnh hưởng trạng thái lỗi).</summary>
+        public ICommand ClearAlarmHistoryCommand { get; }
+
         #endregion
 
         [ImportingConstructor]
@@ -656,6 +783,7 @@ namespace MLAstro_Robotic_Polar_Alignment.Dockables
             AlignAltCommand = new RelayCommand(_ => OnAlignAlt(), _ => CanAlign);
             AlignAllCommand = new RelayCommand(_ => OnAlignAll(), _ => CanAlign);
             ToggleModifyCommand = new RelayCommand(_ => OnToggleModify(), _ => CanModify);
+            ClearAlarmHistoryCommand = new RelayCommand(_ => ClearAlarmHistoryRows());
 #pragma warning restore CS0618
 
             // Subscribe to serial service events (using singleton)
@@ -871,6 +999,38 @@ namespace MLAstro_Robotic_Polar_Alignment.Dockables
             HasActiveErrors = state.HasErrors;
             HasActiveWarnings = state.HasWarnings;
             AlarmHistoryVisibility = _alarmHistory.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+
+            // Trục bị soft-limit chặn trong lúc đang giữ nút jog → khoá nút hướng vừa bấm, nhả nút
+            // một lần (gửi ":0") rồi không gửi lệnh nào nữa. Xem HandleJogRefused().
+            //  - `AzSL`/`AlSL`: guard toàn cục vừa DỪNG trục tại biên (báo cho mọi nguồn chuyển động).
+            //  - `RfJogAz`/`RfJogAl`: trục đã ĐỨNG SẴN tại biên mà còn nhấn jog. Firmware chỉ bật bit
+            //    này khi AzSL/AlSL đã tắt nên hai nguồn KHÔNG bao giờ trùng (không có 2 dòng Alarm).
+            if (IsCodeActive(state, "AzSL") || IsCodeActive(state, "RfJogAz")) HandleJogRefused("az");
+            if (IsCodeActive(state, "AlSL") || IsCodeActive(state, "RfJogAl")) HandleJogRefused("alt");
+        }
+
+        /// <summary>True khi mã lỗi/cảnh báo đang ở mức WARNING (1) hoặc ERROR (2).</summary>
+        private static bool IsCodeActive(DriverErrorState state, string code)
+        {
+            return state.Codes.TryGetValue(code, out var value) && (value == 1 || value == 2);
+        }
+
+        /// <summary>
+        /// Nút CLEAR trên bảng Alarm: chỉ xoá LỊCH SỬ hiển thị. KHÁC với ClearAlarmHistory() (dùng khi
+        /// ngắt kết nối) — không đụng vào trạng thái lỗi/cảnh báo đang active của thiết bị.
+        /// </summary>
+        private void ClearAlarmHistoryRows()
+        {
+            // Có thể được gọi từ thread khác → đưa về UI thread.
+            if (Application.Current?.Dispatcher != null && !Application.Current.Dispatcher.CheckAccess())
+            {
+                Application.Current.Dispatcher.BeginInvoke(new Action(ClearAlarmHistoryRows));
+                return;
+            }
+
+            _alarmHistory.Clear();
+            AlarmHistoryVisibility = Visibility.Collapsed;
+            Logger.Info("[MLAstro] Alarm history cleared by user");
         }
 
         private void NotifyAlarm(DriverAlarm alarm)
@@ -985,6 +1145,7 @@ namespace MLAstro_Robotic_Polar_Alignment.Dockables
 
         public void StartMoveUp()
         {
+            UnblockJogAxis("alt");   // bấm lại (hướng ngược lại) → mở khoá nút mũi tên của trục này
             if (IsRelativeMode)
             {
                 SendRelativeMove("MAlU");
@@ -997,6 +1158,7 @@ namespace MLAstro_Robotic_Polar_Alignment.Dockables
 
         public void StartMoveDown()
         {
+            UnblockJogAxis("alt");
             if (IsRelativeMode)
             {
                 SendRelativeMove("MAlD");
@@ -1009,6 +1171,7 @@ namespace MLAstro_Robotic_Polar_Alignment.Dockables
 
         public void StartMoveLeft()
         {
+            UnblockJogAxis("az");
             if (IsRelativeMode)
             {
                 SendRelativeMove("MAzL");
@@ -1021,6 +1184,7 @@ namespace MLAstro_Robotic_Polar_Alignment.Dockables
 
         public void StartMoveRight()
         {
+            UnblockJogAxis("az");
             if (IsRelativeMode)
             {
                 SendRelativeMove("MAzR");
@@ -1199,6 +1363,13 @@ namespace MLAstro_Robotic_Polar_Alignment.Dockables
                 {
                     _jogWatchdogTimer.Dispose();
                     _jogWatchdogTimer = null;
+                }
+
+                // Stop the jog auto-unblock timer
+                if (_jogUnblockTimer != null)
+                {
+                    _jogUnblockTimer.Stop();
+                    _jogUnblockTimer = null;
                 }
 
                 // Unsubscribe from serial service events

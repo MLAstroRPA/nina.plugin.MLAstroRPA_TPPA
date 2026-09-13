@@ -116,6 +116,116 @@
 `MLAstroRPA-navigation/Plugin/MLAstroOptions.xaml`,
 `MLAstroRPA-navigation/Services/SerialConnectionService.cs`
 
+### MLAstroRPA — Wireless: jog deceleration, Relative mode, alarms & error logs
+
+- **Jog release now decelerates** instead of stopping dead. The WebSocket `stop` command calls
+  `stopAllMotion()`, which cancels the far target with `setCurrentPosition()` (a deliberate hard stop
+  for the STOP/E-STOP buttons) — so releasing a jog braked instantly. Added a dedicated
+  `{"cmd":"stopMove","data":{"axis":"az|alt"}}` command mirroring the Serial `MAzL:0` / `MAlU:0`
+  release (`setAcceleration(decel)` + `stop()`), used by the plugin **and** by the Web UI jog release
+  (mouse-up / mouse-leave / touch-end / arrow key-up). STOP and E-STOP keep the old hard-stop path.
+- **Relative mode stays on**: `TelemetryData.IsRelativeMode` is parsed from the telemetry `JoRe` key,
+  which the WebSocket telemetry does not carry — so the dock reset the toggle to OFF on every packet.
+  The synthesized telemetry line now includes `JoRe`/`ReDe`/`ReAM`/`ReAS` from the tracked state.
+- **Alarm History now works over Wireless**: the firmware broadcasts its error telemetry as
+  `{"error":"ERROR:Code:value,..."}` (edge-triggered, same string as the Serial line); the plugin
+  feeds it into the shared pipeline, so the dock's Alarm panel and `HasActiveErrors` behave exactly as
+  with the COM port.
+- **Error/warning logs now appear in the System log**: each `alert` from the firmware is added to the
+  log (colour-coded) in addition to the NINA toast, and every error-state change writes a readable
+  summary line — e.g. `DRIVER ERROR: AZ open load (AzOL), ALT hard limit (AlHL)` / `All clear`.
+
+**Files:** `MLAstroRPA-navigation/Services/MlastroWebSocketService.cs`,
+`src/Web/WebControl.cpp`, `src/Serial/SerialControl.cpp`, `data/script.js` (firmware repo),
+`src/Websocket-protocol.md`
+
+### MLAstroRPA — Jog: nút mũi tên tự khoá khi bị từ chối vì soft-limit
+
+- Khi firmware từ chối lệnh jog vì trục đã ở/qua soft-limit (`CmdRf` bit JOG_AZ/JOG_ALT → mã
+  `RfJogAz`/`RfJogAl`), plugin **khoá đúng nút hướng vừa bấm** và **nhả jog ngay một lần** (gửi
+  `MAzL:0` / `MAlU:0` qua `StopJogMovement()` — hàm này cũng dừng watchdog 250 ms và xoá lệnh đang
+  chạy) rồi **không gửi lệnh nào nữa** → hết cảnh spam lệnh bị từ chối mỗi 250 ms.
+- Ghi chú kỹ thuật: **chỉ `IsEnabled = false` là KHÔNG đủ** — WPF không phát `MouseUp`/`MouseLeave`
+  cho button vừa bị disable nên handler nhả nút không chạy; vì vậy phải gọi `StopJogMovement()`
+  tường minh ngay khi nhận cảnh báo từ chối.
+- Nút được mở khoá lại khi người dùng bấm **hướng ngược lại** (`UnblockJogAxis`) — lúc đó trục đi ra
+  khỏi giới hạn nên hướng cũ dùng lại được.
+- **Tự mở khoá sau 2 giây** (`JOG_UNBLOCK_DELAY_MS`, `DispatcherTimer`): mỗi lần bị từ chối lại dời hẹn,
+  nên trong lúc giữ/nhấn liên tục nút vẫn khoá, nhưng chỉ 2 s sau lần từ chối cuối là nút sáng lại.
+  Cảnh báo "trục đang ở biên" là tạm thời — trục có thể đã được đưa ra khỏi giới hạn bằng nguồn khác
+  (relative / auto / Web UI) nên không giữ nút khoá vĩnh viễn. Timer được dọn trong `Dispose()`.
+- Chống trùng cảnh báo: nút mũi tên khoá theo **cả hai** nguồn — `AzSL`/`AlSL` (guard vừa hãm dừng trục
+  tại biên) hoặc `RfJogAz`/`RfJogAl` (trục đứng sẵn tại biên mà vẫn nhấn jog). Firmware bảo đảm hai
+  nguồn **loại trừ nhau** nên bảng Alarm và toast chỉ có **1 dòng** cho mỗi sự việc (trước đó jog vào
+  giới hạn làm hiện 2 warning cùng lúc: `AZ soft limit stop` + `AZ jog refused`).
+- Bốn nút mũi tên giờ bind `IsEnabled` vào `CanJogAltUp` / `CanJogAltDown` / `CanJogAzLeft` /
+  `CanJogAzRight` (= `CanManualControl` && chưa bị khoá) thay cho `CanManualControl` trực tiếp.
+
+**Files:** `MLAstroRPA-navigation/Dockables/PolarAlignmentDockVM.cs`,
+`MLAstroRPA-navigation/Dockables/PolarAlignmentDockable.xaml`
+
+### MLAstroRPA — Alarm: nút CLEAR + tên cảnh báo soft-limit
+
+- Bảng **Alarm History** có thêm nút **🗑 CLEAR** (`ClearAlarmHistoryCommand`) để xoá lịch sử cảnh báo.
+  Nút chỉ xoá phần hiển thị — **không** đụng tới trạng thái lỗi/cảnh báo đang active của thiết bị
+  (khác với `ClearAlarmHistory()` nội bộ dùng khi ngắt kết nối, hàm này vẫn reset cả trạng thái).
+- Đổi tên hiển thị cho khớp log firmware: `AzSL`/`AlSL` = **"AZ/ALT soft limit reached"** (trước là
+  "AZ soft limit stop") và `RfJogAz`/`RfJogAl` = **"AZ/ALT jog refused (already at soft limit)"** —
+  nhờ vậy dòng trên bảng Alarm đọc ra giống hệt dòng log trong System Log, dễ đối chiếu.
+
+**Files:** `MLAstroRPA-navigation/Services/SerialConnectionService.cs`,
+`MLAstroRPA-navigation/Dockables/PolarAlignmentDockVM.cs`,
+`MLAstroRPA-navigation/Dockables/PolarAlignmentDockable.xaml`
+
+### MLAstroRPA — Alarm: hiển thị các lệnh bị TỪ CHỐI vì soft-limit (`CmdRf`)
+
+- Dòng ERROR telemetry có token mới `CmdRf:<bitfield>`: mỗi bit là một loại lệnh bị từ chối vì
+  soft-limit, bật ngay lúc bị từ chối và firmware tự tắt sau ~1.5 s nếu loại lệnh đó không còn bị
+  từ chối nữa.
+- Plugin **giải mã bitfield** thành từng mã riêng, mức **WARNING** (giá trị 1), với tên rõ ràng:
+  `RfRelAz` / `RfRelAl` (relative move AZ/ALT), `RfAlnAz` / `RfAlnAl` / `RfAlnOv` (align: target AZ,
+  target ALT, nhánh overshoot ALT), `RfJogAz` / `RfJogAl` (jog tại giới hạn) → mỗi mã một dòng trong
+  **Alarm History** kèm thời điểm bắt đầu và kết thúc.
+- Vì là WARNING nên không khóa hệ thống và không bắn toast (giống các cảnh báo soft-limit khác).
+
+**Files:** `MLAstroRPA-navigation/Services/SerialConnectionService.cs`
+
+### MLAstroRPA — Wireless: System log now identical to the Web UI (removed 2 extra sources)
+
+- The plugin's System log used to show two kinds of lines the Web UI never has:
+  (1) the device `alert` (e.g. `⚠️ Soft Limit Reached! AZ axis stopped at configured limit.`) and
+  (2) plugin-generated driver summaries (`DRIVER WARNING: AZ soft limit stop (AzSL)`,
+  `DRIVER ERROR: …`, `All clear - no active driver errors`).
+- The Web UI shows `alert` in a **modal** (`showModal('System Message', data.alert)`) and does **not**
+  log it; it has no driver-summary lines at all. The plugin now matches exactly: `alert` → NINA toast
+  (equivalent of the modal) + NINA log file only, `error` telemetry → Alarm History panel + NINA log
+  file only.
+- Removed the now-dead `AddErrorSummaryToSystemLog()` helper and its `_lastErrorSummary` field.
+- The System log therefore has exactly the two device-origin sources the Web UI has: the `log`
+  messages and the `reason` of `controlTakenBySerial` / `controlReleased`.
+- Driver alarms remain fully visible in the **Alarm History** panel and as NINA notifications.
+- The log timestamp now uses the locale's **short time** pattern (`ToString("t")`) — the same source the
+  Web UI uses (`toLocaleTimeString()`), so a vi-VN machine shows `[17:07:51]` on both sides instead of
+  the plugin showing `[5:07:51 pm]`.
+
+**Files:** `MLAstroRPA-navigation/Services/MlastroWebSocketService.cs`,
+`MLAstroRPA-navigation/Dockables/SystemLogEntry.cs`
+
+### MLAstroRPA — Wireless: Relative mode now pushes to the device (Web/PC stay in sync)
+
+- Toggling **Jog ↔ Relative** (or editing the relative degrees/minutes/seconds) in the dock now also
+  pushes the setting **down to the firmware** via `saveConfig` with `{"relative":{mode,d,m,s}}` —
+  exactly what the Web UI does (`saveRelativeSettings()`). Previously `JoRe`/`ReDe`/`ReAM`/`ReAS` were
+  only remembered inside the plugin, so the device (and the Web UI monitoring from a browser) stayed in
+  *Jog* while the PC was already moving relatively.
+- The plugin also reads the state **back** from the device: the new firmware broadcast
+  `{"relative":{...}}` and the connect snapshot both update the tracked state, so the dock, the
+  synthesized telemetry (`JoRe`/`ReDe`/`ReAM`/`ReAS`) and the Web UI can never disagree.
+- Sends are tagged `origin:"pcPlugin"` so the firmware's `configSaved` ack is not mistaken by the Web
+  frontend for the ack of its own *SAVE ALL & REBOOT* flow.
+
+**Files:** `MLAstroRPA-navigation/Services/MlastroWebSocketService.cs`
+
 **Files:** `MLAstroRPA-navigation/Settings/PluginSettings.cs`,
 `MLAstroRPA-navigation/Services/MlastroWebSocketService.cs`,
 `MLAstroRPA-implement/MlastroWirelessSerial.cs`,

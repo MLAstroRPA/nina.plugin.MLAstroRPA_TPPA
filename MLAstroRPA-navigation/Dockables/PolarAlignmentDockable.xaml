@@ -341,7 +341,7 @@
                                 PreviewMouseDown="OnMoveUpDown"
                                 PreviewMouseUp="OnMoveUpUp"
                                 MouseLeave="OnMoveUpUp"
-                                IsEnabled="{Binding CanManualControl}"/>
+                                IsEnabled="{Binding CanJogAltUp}"/>
 
                         <!-- Left Button -->
                         <Button Content="◄ Az" 
@@ -351,7 +351,7 @@
                                 PreviewMouseDown="OnMoveLeftDown"
                                 PreviewMouseUp="OnMoveLeftUp"
                                 MouseLeave="OnMoveLeftUp"
-                                IsEnabled="{Binding CanManualControl}"/>
+                                IsEnabled="{Binding CanJogAzLeft}"/>
 
                         <!-- Stop Button -->
                         <Button Content="⏹ STOP" 
@@ -368,7 +368,7 @@
                                 PreviewMouseDown="OnMoveRightDown"
                                 PreviewMouseUp="OnMoveRightUp"
                                 MouseLeave="OnMoveRightUp"
-                                IsEnabled="{Binding CanManualControl}"/>
+                                IsEnabled="{Binding CanJogAzRight}"/>
 
                         <!-- Down Button -->
                         <Button Content="▼ Alt" 
@@ -378,7 +378,7 @@
                                 PreviewMouseDown="OnMoveDownDown"
                                 PreviewMouseUp="OnMoveDownUp"
                                 MouseLeave="OnMoveDownUp"
-                                IsEnabled="{Binding CanManualControl}"/>
+                                IsEnabled="{Binding CanJogAltDown}"/>
                     </Grid>
                 </StackPanel>
             </Expander>
@@ -536,6 +536,15 @@
             <Expander Header="⚠️ Alarm History" IsExpanded="True" Margin="0,0,0,10"
                       Visibility="{Binding AlarmHistoryVisibility}">
                 <StackPanel Margin="6">
+                    <Button Content="🗑 CLEAR"
+                            HorizontalAlignment="Right"
+                            Padding="12,4"
+                            Margin="0,0,0,6"
+                            Background="#3A4654"
+                            Foreground="White"
+                            BorderBrush="#55636F"
+                            ToolTip="Xoá toàn bộ lịch sử Alarm"
+                            Command="{Binding ClearAlarmHistoryCommand}"/>
                     <DataGrid ItemsSource="{Binding AlarmHistory}"
                               AutoGenerateColumns="False"
                               CanUserAddRows="False"

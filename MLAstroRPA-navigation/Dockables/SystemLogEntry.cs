@@ -26,8 +26,10 @@ namespace MLAstro_Robotic_Polar_Alignment.Dockables
     {
         public SystemLogEntry(string message, SystemLogLevel level, DateTime timestamp)
         {
-            // Web UI dùng toLocaleTimeString() → "11:08:06 pm" (chữ thường) nên giữ đúng định dạng đó.
-            Time = timestamp.ToString("h:mm:ss tt", CultureInfo.CurrentCulture).ToLowerInvariant();
+            // Web UI dùng toLocaleTimeString() → đúng định dạng giờ NGẮN của locale hệ thống
+            // (vi-VN: "17:07:51" 24 giờ; en-US: "5:07:51 PM"). Dùng pattern "t" của .NET — cũng lấy
+            // từ locale hệ thống — để cột thời gian của plugin khớp y hệt bảng log của web.
+            Time = timestamp.ToString("t", CultureInfo.CurrentCulture);
             Message = message ?? string.Empty;
             Level = level;
         }

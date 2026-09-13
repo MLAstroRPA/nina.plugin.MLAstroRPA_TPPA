@@ -461,7 +461,10 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
                 }
                 if (TryGetString(root, "alert", out var alert))
                 {
-                    // Web UI hiện alert bằng modal chứ không đưa vào System log → ở plugin hiện bằng toast NINA.
+                    // Web UI hiện `alert` bằng MODAL và KHÔNG ghi vào bảng System log (xem
+                    // data/script.js: showModal('System Message', data.alert) — không gọi appendLog).
+                    // Plugin giữ đúng tương đương: toast NINA + file NINA log, KHÔNG đưa vào System log
+                    // → bảng System log của plugin luôn giống hệt bảng System Log của Web UI.
                     AppendLog($"ALERT: {alert}");
                     try { Notification.ShowWarning($"MLAstro RPA: {alert}"); } catch { }
                 }
@@ -522,6 +525,7 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
                 if (TryGetInt(root, "speedLevel", out _) || TryGetString(root, "fw_ver", out _))
                 {
                     CacheSnapshotSections(root);
+                    ApplyRelativeState(root); // Jog/Relative đang lưu trên device là nguồn sự thật
                     ApplyWifiCredentialsFromSnapshot(root);
                     if (TryGetString(root, "fw_ver", out var fw))
                     {
@@ -535,7 +539,28 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
                     return;
                 }
 
-                // 4) Telemetry định kỳ: KHÔNG ghi vào System log (250 ms/lần sẽ làm ngập log),
+                // 3b) Firmware broadcast trạng thái Relative ({"relative":{...}}) - phát ra khi
+                //     BẤT KỲ client nào (Web hoặc PC plugin) đổi chế độ/tham số Relative.
+                //     Ghi lại để telemetry (JoRe/ReDe/ReAM/ReAS) + dock luôn khớp với backend.
+                if (ApplyRelativeState(root))
+                {
+                    return;
+                }
+
+                // 4) Trạng thái mã lỗi do firmware gửi qua WebSocket (edge-triggered, giống dòng
+                //    "ERROR:..." của Serial). Không có nhánh này thì bảng Alarm History trống trơn
+                //    vì đường Serial không được dùng khi kết nối Wireless.
+                if (TryGetString(root, "error", out var errorLine) && !string.IsNullOrWhiteSpace(errorLine))
+                {
+                    var line = errorLine.StartsWith("ERROR:", StringComparison.Ordinal) ? errorLine : "ERROR:" + errorLine;
+                    // CHỈ nạp vào bảng Alarm History + file NINA log. Web UI cũng KHÔNG ghi dòng lỗi vào
+                    // System log (chỉ modal), nên đứng thêm dòng tổng hợp vào đây để hai bảng log giống nhau.
+                    AppendLog(line);
+                    _serial.InjectIncomingText(line);   // -> ProcessErrorTelemetry -> Alarm History
+                    return;
+                }
+
+                // 5) Telemetry định kỳ: KHÔNG ghi vào System log (250 ms/lần sẽ làm ngập log),
                 //    chỉ chuyển thành telemetry text cho pipeline UI + driver TPPA.
                 //    Chỉ coi là telemetry khi có trường vị trí (các frame chỉ có sys_status như
                 //    STOPPED/REBOOTING không được phép ghi đè vị trí hiển thị).
@@ -644,6 +669,14 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
                 AddToken(tokens, "AzPH", posAz.ToString("0.#####", CultureInfo.InvariantCulture));
             if (TryGetDouble(root, "pos_alt", out var posAlt))
                 AddToken(tokens, "AlPH", posAlt.ToString("0.#####", CultureInfo.InvariantCulture));
+
+            // Chế độ dịch chuyển tương đối: giao thức Serial có JoRe/ReDe/ReAM/ReAS là TRẠNG THÁI,
+            // còn WebSocket không có lệnh tương đương nên plugin tự ghi nhớ. Phải đưa vào telemetry,
+            // nếu không dock sẽ nhận IsRelativeMode = false sau mỗi gói (toggle tự tắt ngay khi bật).
+            AddToken(tokens, "JoRe", _relativeMode ? "1" : "0");
+            AddToken(tokens, "ReDe", _relativeDegrees.ToString(CultureInfo.InvariantCulture));
+            AddToken(tokens, "ReAM", _relativeMinutes.ToString(CultureInfo.InvariantCulture));
+            AddToken(tokens, "ReAS", _relativeSeconds.ToString(CultureInfo.InvariantCulture));
 
             AppendSnapshotTokens(tokens);
 
@@ -756,6 +789,67 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
             {
                 Logger.Error($"[MLAstro][WS] Send failed: {ex.Message}");
                 AppendLog($"ERROR: {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Đẩy chế độ/tham số Relative XUỐNG firmware, đúng như Web UI làm
+        /// (saveRelativeSettings() → saveConfig). Nhờ vậy backend là nguồn sự thật duy nhất:
+        /// firmware ghi FRAM rồi broadcast {"relative":{...}} cho MỌI client (Web + PC).
+        /// </summary>
+        private void PushRelativeSettings()
+        {
+            if (!IsConnected) return;
+
+            try
+            {
+                var payload = new
+                {
+                    origin = "pcPlugin", // để ack configSaved không bị hiểu là ack của lượt web-save
+                    relative = new
+                    {
+                        mode = _relativeMode,
+                        d = _relativeDegrees,
+                        m = _relativeMinutes,
+                        s = _relativeSeconds
+                    }
+                };
+
+                var json = JsonSerializer.Serialize(new { cmd = "saveConfig", data = payload });
+                SendJsonAsync(json, _cts?.Token ?? CancellationToken.None).GetAwaiter().GetResult();
+                Logger.Info($"[MLAstro][WS] Relative pushed: mode={_relativeMode}, {_relativeDegrees}d {_relativeMinutes}m {_relativeSeconds}s");
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"[MLAstro][WS] PushRelativeSettings failed: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Đọc trạng thái Relative NGƯỢC từ backend (broadcast {"relative":{...}} hoặc init
+        /// snapshot). Nhờ vậy plugin không bao giờ lệch với firmware/Web client.
+        /// </summary>
+        private bool ApplyRelativeState(JsonElement container)
+        {
+            try
+            {
+                if (container.ValueKind != JsonValueKind.Object) return false;
+                if (!container.TryGetProperty("relative", out var rel) || rel.ValueKind != JsonValueKind.Object) return false;
+
+                if (rel.TryGetProperty("mode", out var mode) &&
+                    (mode.ValueKind == JsonValueKind.True || mode.ValueKind == JsonValueKind.False))
+                {
+                    _relativeMode = mode.GetBoolean();
+                }
+                if (rel.TryGetProperty("d", out var d) && d.ValueKind == JsonValueKind.Number) _relativeDegrees = d.GetInt32();
+                if (rel.TryGetProperty("m", out var m) && m.ValueKind == JsonValueKind.Number) _relativeMinutes = m.GetInt32();
+                if (rel.TryGetProperty("s", out var s) && s.ValueKind == JsonValueKind.Number) _relativeSeconds = s.GetInt32();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"[MLAstro][WS] ApplyRelativeState failed: {ex.Message}");
                 return false;
             }
         }
@@ -952,24 +1046,32 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
             }
 
             // ---- Chế độ / tham số dịch chuyển tương đối (chỉ có ở giao thức serial) ----
+            // Ghi nhớ NỘI BỘ **và** đẩy xuống firmware bằng saveConfig (giống hệt Web UI trong
+            // saveRelativeSettings()). Trước đây chỉ nhớ nội bộ nên backend vẫn ở chế độ Jog,
+            // Web client (đang monitor) không hề biết → vẫn hiển thị Jog dù PC đã bật Relative.
+            // Sau khi đẩy xuống, firmware broadcast {"relative":{...}} → mọi client đồng bộ.
             if (tokens.TryGetValue("JoRe", out var joRe))
             {
                 _relativeMode = joRe != "0";
-                return outgoing; // WebSocket dùng move/moveRelative riêng, không cần lệnh mode
+                PushRelativeSettings();
+                return outgoing;
             }
             if (tokens.TryGetValue("ReDe", out var reDe))
             {
                 _relativeDegrees = ParseIntOrZero(reDe);
+                PushRelativeSettings();
                 return outgoing;
             }
             if (tokens.TryGetValue("ReAM", out var reAm))
             {
                 _relativeMinutes = ParseIntOrZero(reAm);
+                PushRelativeSettings();
                 return outgoing;
             }
             if (tokens.TryGetValue("ReAS", out var reAs))
             {
                 _relativeSeconds = ParseIntOrZero(reAs);
+                PushRelativeSettings();
                 return outgoing;
             }
 
@@ -1036,12 +1138,13 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
 
             if (state == "0")
             {
-                var wasActive = _activeJogAxis != null;
                 _activeJogAxis = null;
                 _activeJogDirection = 0;
-                if (!_relativeMode && wasActive)
+                if (!_relativeMode)
                 {
-                    outgoing.Add("{\"cmd\":\"stop\",\"data\":{}}");
+                    // Nhả jog = GIẢM TỐC mượt theo trục (giống Serial MAzL:0).
+                    // Luôn gửi kể cả khi plugin không thấy lần nhấn trước đó — dừng an toàn hơn.
+                    outgoing.Add($"{{\"cmd\":\"stopMove\",\"data\":{{\"axis\":\"{axis}\"}}}}");
                 }
                 return outgoing;
             }

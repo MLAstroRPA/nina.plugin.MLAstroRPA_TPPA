@@ -1386,6 +1386,21 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
                     }
                 }
 
+                // `CmdRf:N` = bitfield các LỆNH BỊ TỪ CHỐI vì soft-limit (mỗi bit 1 loại lệnh; bit
+                // BẬT ngay khi lệnh bị từ chối, firmware tự TẮT sau ~1.5 s nếu loại lệnh đó không còn
+                // bị từ chối nữa). Bung thành từng mã riêng với giá trị 1 = WARNING để bảng Alarm
+                // hiển thị mỗi loại lệnh một dòng có tên rõ ràng (thay vì dòng "CmdRf: 5" vô nghĩa).
+                if (dict.Remove("CmdRf", out var refusedBits))
+                {
+                    if ((refusedBits & 0x01) != 0) dict["RfRelAz"] = 1;   // relative move AZ vượt soft-limit
+                    if ((refusedBits & 0x02) != 0) dict["RfRelAl"] = 1;   // relative move ALT vượt soft-limit
+                    if ((refusedBits & 0x04) != 0) dict["RfAlnAz"] = 1;   // align: target AZ ngoài giới hạn
+                    if ((refusedBits & 0x08) != 0) dict["RfAlnAl"] = 1;   // align: target ALT ngoài giới hạn
+                    if ((refusedBits & 0x10) != 0) dict["RfJogAz"] = 1;   // jog AZ tại giới hạn
+                    if ((refusedBits & 0x20) != 0) dict["RfJogAl"] = 1;   // jog ALT tại giới hạn
+                    if ((refusedBits & 0x40) != 0) dict["RfAlnOv"] = 1;   // align nhánh overshoot (ALT)
+                }
+
                 var state = new DriverErrorState(dict);
                 Logger.Info($"[MLAstro] Error telemetry parsed: {(state.HasErrors || state.HasWarnings ? state.Summary : "All clear")}");
                 ErrorState = state;
@@ -2817,9 +2832,18 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
             "AlOL" => "ALT open load",
             "AzHL" => "AZ hard limit",
             "AlHL" => "ALT hard limit",
-            "AzSL" => "AZ soft limit stop",
-            "AlSL" => "ALT soft limit stop",
+            "AzSL" => "AZ soft limit reached",
+            "AlSL" => "ALT soft limit reached",
             "Esc" => "Hard-limit escape mode",
+            // Lệnh bị TỪ CHỐI vì soft-limit — bitfield `CmdRf` của ERROR telemetry (xem
+            // ProcessErrorTelemetry: mỗi bit được bung thành 1 mã riêng, giá trị 1 = WARNING).
+            "RfRelAz" => "AZ relative move refused (soft limit)",
+            "RfRelAl" => "ALT relative move refused (soft limit)",
+            "RfAlnAz" => "AZ align target out of soft limit",
+            "RfAlnAl" => "ALT align target out of soft limit",
+            "RfJogAz" => "AZ jog refused (already at soft limit)",
+            "RfJogAl" => "ALT jog refused (already at soft limit)",
+            "RfAlnOv" => "ALT align overshoot leg out of soft limit",
             _ => code
         };
     }
