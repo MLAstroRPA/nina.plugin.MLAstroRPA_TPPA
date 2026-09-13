@@ -298,6 +298,19 @@ phía plugin/TPPA giữ nguyên **giao thức text Serial** cũ. Toàn bộ vi�
 **Files:** `MLAstroRPA-navigation/Dockables/PolarAlignmentDockVM.cs`,
 `MLAstroRPA-navigation/Dockables/PolarAlignmentDockable.xaml`
 
+### MLAstroRPA — Fixed: nút toggle hướng align (Left/Right, Up/Down) không đảo chiều qua Wireless
+
+- Cờ `dir` trong JSON `align.az/alt` là **bool**; translator đọc nó bằng cách chuyển sang chuỗi rồi so
+  `!= "0"` — nhưng `Convert.ToString(false)` là `"False"` (không phải `"0"`) nên **cờ false bị đọc thành
+  true**. Hệ quả: cache hướng align của plugin luôn = "Right/Up" sau mỗi lần nhận snapshot/push cấu hình
+  (kể cả frame push do chính lệnh toggle tạo ra), nên nút **Align Az / Align Alt** (gửi `AzED…,AzAN:1`
+  không kèm `AzDi`) luôn tính sai số dương → trục chạy mãi một hướng, không đảo chiều được.
+- Nay dùng `GetFlag()` cho MỌI trường kiểu cờ (bool / số 0-1 / chuỗi `"1"`|`"true"`) — hướng lấy đúng
+  từ thiết bị và token telemetry `AzDi/AlDi` phản ánh đúng trạng thái toggle trên web/thiết bị.
+- Đường Serial không bị ảnh hưởng (firmware tự dùng giá trị `ser_*_err_dir` đã lưu).
+
+**Files:** `MLAstroRPA-navigation/Services/MlastroWebSocketService.cs`
+
 ## 2.0.2.0
 
 ### MLAstroRPA — dockable layout cleanup

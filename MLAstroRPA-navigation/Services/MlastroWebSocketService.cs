@@ -726,8 +726,28 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
             var d = ParseDecimal(Get(align, axis + ".d"));
             var m = ParseDecimal(Get(align, axis + ".m"));
             var s = ParseDecimal(Get(align, axis + ".s"));
-            var dir = Get(align, axis + ".dir") != "0";
+            // PHẢI dùng GetFlag(): `dir` trong JSON là bool, mà Convert.ToString(false) = "False" nên
+            // cách so sánh kiểu `Get(...) != "0"` sẽ đọc cờ false thành TRUE → hướng align luôn là
+            // "Right/Up" và người dùng không thể đảo chiều bằng nút toggle trên PC client.
+            var dir = GetFlag(align, axis + ".dir");
             return ((int)d, (int)m, s, dir);
+        }
+
+        /// <summary>
+        /// Đọc một cờ trong dict đã cache (JSON bool / số 0-1 / chuỗi "1"|"true") thành bool.
+        /// Dùng cho MỌI trường kiểu cờ — không so sánh chuỗi với "0" vì bool→string là "True"/"False".
+        /// </summary>
+        private static bool GetFlag(Dictionary<string, object> d, string key)
+        {
+            if (!d.TryGetValue(key, out var v) || v == null) return false;
+            return v switch
+            {
+                bool b => b,
+                long l => l != 0,
+                double db => Math.Abs(db) > double.Epsilon,
+                string s => s == "1" || s.Equals("true", StringComparison.OrdinalIgnoreCase),
+                _ => false
+            };
         }
 
         private static double ParseDecimal(string value)
