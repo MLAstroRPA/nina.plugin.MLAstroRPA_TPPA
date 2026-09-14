@@ -315,7 +315,24 @@ if ($CreateRelease) {
     Write-Host "Creating GitHub release: $tag  (repo: $Repo)" -ForegroundColor Yellow
     $notes = "Release v$Version`n`nView README.md to know how to install.`n`n`"NINA.Plugins.MLAstroRPA_TPPA.dll`" is the merged MLAstroRPA+TPPA plugin (MLAstro hardware control + Three Point Polar Alignment)."
 
-    $createOut = & $ghExe release create $tag --repo $Repo --title $tag --notes $notes 2>&1
+    # Tag PHAI tro dung commit dang build. Neu khong truyen --target, `gh release create` se tag
+    # nhanh DEFAULT cua repo (vd `main`) => release v2.1.0.0 tung tro vao commit cu trong khi MSI
+    # duoc build tu nhanh Feature-mDNS.
+    $targetSha = (git rev-parse HEAD 2>$null | Select-Object -First 1)
+    if ($targetSha) { $targetSha = $targetSha.Trim() }
+    if (-not $targetSha) {
+        Write-Host "ERROR: cannot resolve the current commit (git rev-parse HEAD)." -ForegroundColor Red
+        exit 1
+    }
+    Write-Host "Release target commit: $targetSha" -ForegroundColor Gray
+
+    # `--target <sha>` yeu cau commit da ton tai tren GitHub => canh bao neu chua push.
+    $remoteHasCommit = (& git branch -r --contains $targetSha 2>$null)
+    if (-not $remoteHasCommit) {
+        Write-Host "WARNING: commit $targetSha is not on any remote branch. Push it first or the tag cannot be created." -ForegroundColor Yellow
+    }
+
+    $createOut = & $ghExe release create $tag --repo $Repo --target $targetSha --title $tag --notes $notes 2>&1
     if ($LASTEXITCODE -ne 0) {
         Write-Host "ERROR: gh release create failed:" -ForegroundColor Red
         $createOut | ForEach-Object { Write-Host "  $_" }
