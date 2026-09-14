@@ -6,7 +6,13 @@ param(
     [string]$Version = "",
     [switch]$CreateRelease,
     [switch]$ReleaseOnly,
-    [string]$Repo = ""
+    [string]$Repo = "",
+    # File markdown chứa MÔ TẢ RELEASE (tùy chọn). Nếu truyền, nội dung file được dùng NGUYÊN VĂN làm
+    # release notes trên GitHub thay cho notes mặc định ngắn gọn — dùng cho flow agent tự viết
+    # description chi tiết (xem skill `release-repo`).
+    [string]$NotesFile = "",
+    # Bỏ qua câu hỏi xác nhận tương tác ⇒ dùng khi chạy tự động trong phiên chat/CI.
+    [switch]$Yes
 )
 
 $ErrorActionPreference = "Stop"
@@ -282,7 +288,11 @@ if ($CreateRelease) {
     # In release-only mode the confirm states that the shown version is the newest in Output.
     Write-Host ""
     Write-Host "Target GitHub repo: $Repo" -ForegroundColor Magenta
-    if ($ReleaseOnly) {
+    if ($Yes) {
+        # Chạy không tương tác (agent trong phiên chat / CI): đã xác nhận ở trên trước khi gọi.
+        Write-Host "Auto-confirmed by -Yes (non-interactive run)." -ForegroundColor Yellow
+        $confirm = "y"
+    } elseif ($ReleaseOnly) {
         Write-Host "Version $Version is the newest MSI. Do you want to release it to GitHub ('$Repo')? (y/N)" -ForegroundColor Yellow -NoNewline
         $confirm = Read-Host
     } else {
@@ -315,6 +325,18 @@ if ($CreateRelease) {
     Write-Host "Creating GitHub release: $tag  (repo: $Repo)" -ForegroundColor Yellow
     $notes = "Release v$Version`n`nView README.md to know how to install.`n`n`"NINA.Plugins.MLAstroRPA_TPPA.dll`" is the merged MLAstroRPA+TPPA plugin (MLAstro hardware control + Three Point Polar Alignment)."
 
+    # Mô tả chi tiết do agent/người dùng viết sẵn (markdown) → dùng nguyên văn.
+    $useNotesFile = $false
+    if ($NotesFile) {
+        if (Test-Path $NotesFile) {
+            $notes = Get-Content -Path $NotesFile -Raw
+            $useNotesFile = $true
+            Write-Host "Using release notes from: $NotesFile ($($notes.Length) chars)" -ForegroundColor Gray
+        } else {
+            Write-Host "WARNING: -NotesFile not found ($NotesFile) - using the default notes." -ForegroundColor Yellow
+        }
+    }
+
     # Tag PHAI tro dung commit dang build. Neu khong truyen --target, `gh release create` se tag
     # nhanh DEFAULT cua repo (vd `main`) => release v2.1.0.0 tung tro vao commit cu trong khi MSI
     # duoc build tu nhanh Feature-mDNS.
@@ -332,7 +354,11 @@ if ($CreateRelease) {
         Write-Host "WARNING: commit $targetSha is not on any remote branch. Push it first or the tag cannot be created." -ForegroundColor Yellow
     }
 
-    $createOut = & $ghExe release create $tag --repo $Repo --target $targetSha --title $tag --notes $notes 2>&1
+    if ($useNotesFile) {
+        $createOut = & $ghExe release create $tag --repo $Repo --target $targetSha --title $tag --notes-file $NotesFile 2>&1
+    } else {
+        $createOut = & $ghExe release create $tag --repo $Repo --target $targetSha --title $tag --notes $notes 2>&1
+    }
     if ($LASTEXITCODE -ne 0) {
         Write-Host "ERROR: gh release create failed:" -ForegroundColor Red
         $createOut | ForEach-Object { Write-Host "  $_" }
