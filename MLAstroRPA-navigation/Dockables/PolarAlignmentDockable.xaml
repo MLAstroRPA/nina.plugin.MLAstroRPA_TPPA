@@ -7,11 +7,11 @@
     <UserControl.Resources>
         <converters:SpeedLevelToBoolConverter x:Key="SpeedLevelToBoolConverter"/>
 
-        <!-- Speed Button Style -->
+        <!-- Speed Button Style - CIRCULAR button (square 40x40 + CornerRadius 20 = circle) -->
         <Style x:Key="SpeedButtonStyle" TargetType="Button">
-            <Setter Property="Width" Value="50"/>
-            <Setter Property="Height" Value="30"/>
-            <Setter Property="Margin" Value="0,0,5,0"/>
+            <Setter Property="Width" Value="40"/>
+            <Setter Property="Height" Value="40"/>
+            <Setter Property="Margin" Value="4,0"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="BorderThickness" Value="2"/>
             <Setter Property="BorderBrush" Value="#3498DB"/>
@@ -25,7 +25,7 @@
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="4">
+                                CornerRadius="20">
                             <ContentPresenter HorizontalAlignment="Center" 
                                               VerticalAlignment="Center"/>
                         </Border>
@@ -53,35 +53,108 @@
             </Style.Triggers>
         </Style>
 
-        <!-- Movement Button Style with Press Effect -->
+        <!-- Movement Button Style - ROUNDED TRIANGLE shape (direction is shown by the shape itself).
+             Tag="Up|Down|Left|Right" on the Button picks the triangle geometry + label position. -->
         <Style x:Key="MovementButtonStyle" TargetType="Button">
-            <Setter Property="Width" Value="80"/>
-            <Setter Property="Height" Value="60"/>
+            <Setter Property="Width" Value="106"/>
+            <Setter Property="Height" Value="106"/>
             <Setter Property="Background" Value="#34495E"/>
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="BorderThickness" Value="2"/>
-            <Setter Property="BorderBrush" Value="#5D6D7E"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="border" 
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="6">
-                            <ContentPresenter HorizontalAlignment="Center" 
-                                              VerticalAlignment="Center"/>
-                        </Border>
+                        <Grid x:Name="shapeRoot">
+                            <!-- Rounded triangle = triangle geometry filled AND stroked with
+                                 StrokeLineJoin="Round" (the round join rounds the 3 corners).
+                                 Single flat shape: no outline / shadow layer.
+                                 All 4 directions use the SAME triangle (base 74 / axis 65) rotated 90°,
+                                 so the cross stays even. Bigger StrokeThickness = bigger corner radius. -->
+                            <!-- The Path sits on a Canvas ON PURPOSE: a Shape draws its geometry at the
+                                 TOP-LEFT of its own layout box, and for a stroked path WPF sizes that box
+                                 as geometry + StrokeThickness/2 — which shoved the triangle up-left and
+                                 clipped it. On a Canvas the position is exactly Canvas.Left/Top, so the
+                                 triangle's geometry box is simply centred in the button (default = Up/Down;
+                                 Left/Right override Canvas.Left/Top in their Tag triggers). -->
+                            <Canvas>
+                                <Path x:Name="shape"
+                                      Stretch="None"
+                                      Fill="{TemplateBinding Background}"
+                                      Stroke="{TemplateBinding Background}"
+                                      StrokeThickness="26"
+                                      StrokeLineJoin="Round"
+                                      Data="M 37,0 L 74,65 L 0,65 Z"
+                                      Canvas.Left="16"
+                                      Canvas.Top="20.5"/>
+                            </Canvas>
+                            <!-- Label: TextBlock stretched to the FULL button width with
+                                 TextAlignment="Center" (+ VerticalAlignment="Center"), so the word sits
+                                 dead-centre of the button whatever the font metrics are.
+                                 Style="{x:Null}" opts out of NINA's implicit TextBlock style, which could
+                                 otherwise inject a margin/padding and push the text sideways. -->
+                            <TextBlock x:Name="label"
+                                       Text="{TemplateBinding Content}"
+                                       Style="{x:Null}"
+                                       Foreground="{TemplateBinding Foreground}"
+                                       FontWeight="{TemplateBinding FontWeight}"
+                                       FontSize="{TemplateBinding FontSize}"
+                                       HorizontalAlignment="Stretch"
+                                       TextAlignment="Center"
+                                       VerticalAlignment="Center"/>
+                        </Grid>
                         <ControlTemplate.Triggers>
+                            <!-- Direction + label centring on the TRIANGLE CENTROID (trọng tâm), not on the
+                                 button centre: the centroid sits height/3 above the base, i.e. 65/6 = 10.8 px
+                                 from the button centre toward the base. RenderTransform is used because it
+                                 shifts the already-centred text without touching layout. -->
+                            <Trigger Property="Tag" Value="Up">
+                                <Setter TargetName="shape" Property="Data" Value="M 37,0 L 74,65 L 0,65 Z"/>
+                                <Setter TargetName="label" Property="RenderTransform">
+                                    <Setter.Value>
+                                        <TranslateTransform Y="10.8"/>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                            <Trigger Property="Tag" Value="Down">
+                                <Setter TargetName="shape" Property="Data" Value="M 0,0 L 74,0 L 37,65 Z"/>
+                                <Setter TargetName="label" Property="RenderTransform">
+                                    <Setter.Value>
+                                        <TranslateTransform Y="-10.8"/>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                            <Trigger Property="Tag" Value="Left">
+                                <Setter TargetName="shape" Property="Data" Value="M 65,0 L 65,74 L 0,37 Z"/>
+                                <!-- geometry box is 65x74 here => centre it: (106-65)/2, (106-74)/2 -->
+                                <Setter TargetName="shape" Property="Canvas.Left" Value="20.5"/>
+                                <Setter TargetName="shape" Property="Canvas.Top" Value="16"/>
+                                <Setter TargetName="label" Property="RenderTransform">
+                                    <Setter.Value>
+                                        <TranslateTransform X="10.8"/>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                            <Trigger Property="Tag" Value="Right">
+                                <Setter TargetName="shape" Property="Data" Value="M 0,0 L 0,74 L 65,37 Z"/>
+                                <Setter TargetName="shape" Property="Canvas.Left" Value="20.5"/>
+                                <Setter TargetName="shape" Property="Canvas.Top" Value="16"/>
+                                <Setter TargetName="label" Property="RenderTransform">
+                                    <Setter.Value>
+                                        <TranslateTransform X="-10.8"/>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#4A6278"/>
-                                <Setter TargetName="border" Property="BorderBrush" Value="#7F8C8D"/>
+                                <Setter TargetName="shape" Property="Fill" Value="#4A6278"/>
+                                <Setter TargetName="shape" Property="Stroke" Value="#4A6278"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#2ECC71"/>
-                                <Setter TargetName="border" Property="BorderBrush" Value="#27AE60"/>
+                                <Setter TargetName="shape" Property="Fill" Value="#2ECC71"/>
+                                <Setter TargetName="shape" Property="Stroke" Value="#2ECC71"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="shapeRoot" Property="Opacity" Value="0.45"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -91,8 +164,9 @@
 
         <!-- Stop Button Style with Press Effect -->
         <Style x:Key="StopButtonStyle" TargetType="Button">
-            <Setter Property="Width" Value="80"/>
-            <Setter Property="Height" Value="80"/>
+            <Setter Property="Width" Value="96"/>
+            <Setter Property="Height" Value="96"/>
+            <Setter Property="FontSize" Value="15"/>
             <Setter Property="Background" Value="OrangeRed"/>
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="FontWeight" Value="Bold"/>
@@ -353,9 +427,10 @@
                     </Border>
 
                     <!-- Directional Pad -->
-                    <Grid Width="280" Height="280" Margin="0,0,0,15" HorizontalAlignment="Center">
+                    <Grid Width="320" Height="320" Margin="0,0,0,15" HorizontalAlignment="Center">
                         <!-- Up Button -->
-                        <Button Content="▲ Alt" 
+                        <Button Content="Alt"
+                                Tag="Up"
                                 Style="{StaticResource MovementButtonStyle}"
                                 HorizontalAlignment="Center"
                                 VerticalAlignment="Top"
@@ -365,7 +440,8 @@
                                 IsEnabled="{Binding CanJogAltUp}"/>
 
                         <!-- Left Button -->
-                        <Button Content="◄ Az" 
+                        <Button Content="Az"
+                                Tag="Left"
                                 Style="{StaticResource MovementButtonStyle}"
                                 HorizontalAlignment="Left"
                                 VerticalAlignment="Center"
@@ -374,15 +450,18 @@
                                 MouseLeave="OnMoveLeftUp"
                                 IsEnabled="{Binding CanJogAzLeft}"/>
 
-                        <!-- Stop Button -->
-                        <Button Content="⏹ STOP" 
+                        <!-- Stop Button: text label ONLY (no glyph/icon). A plain string content is
+                             rendered by the template's centred ContentPresenter, so the word STOP sits
+                             dead-centre of the button (mid-centre), both horizontally and vertically. -->
+                        <Button Content="STOP"
                                 Style="{StaticResource StopButtonStyle}"
                                 HorizontalAlignment="Center"
                                 VerticalAlignment="Center"
                                 Command="{Binding StopCommand}"/>
 
                         <!-- Right Button -->
-                        <Button Content="► Az" 
+                        <Button Content="Az"
+                                Tag="Right"
                                 Style="{StaticResource MovementButtonStyle}"
                                 HorizontalAlignment="Right"
                                 VerticalAlignment="Center"
@@ -392,7 +471,8 @@
                                 IsEnabled="{Binding CanJogAzRight}"/>
 
                         <!-- Down Button -->
-                        <Button Content="▼ Alt" 
+                        <Button Content="Alt"
+                                Tag="Down"
                                 Style="{StaticResource MovementButtonStyle}"
                                 HorizontalAlignment="Center"
                                 VerticalAlignment="Bottom"

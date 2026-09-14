@@ -3,13 +3,14 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <UserControl.Resources>
-        <!-- Force Stop Button Style with Press Effect -->
+        <!-- Force Stop Button Style - CIRCULAR (same look as the web UI: circle in a square frame).
+             NOTE: the button must stay square (54x54) because CornerRadius = half of the side = circle. -->
         <Style x:Key="ForceStopButtonStyle" TargetType="Button">
-            <Setter Property="Background" Value="DarkRed"/>
+            <Setter Property="Background" Value="#E74C3C"/>
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="FontWeight" Value="Bold"/>
-            <Setter Property="BorderThickness" Value="2"/>
-            <Setter Property="BorderBrush" Value="#8B0000"/>
+            <Setter Property="BorderThickness" Value="3"/>
+            <Setter Property="BorderBrush" Value="#C0392B"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -18,17 +19,17 @@
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="4">
+                                CornerRadius="27">
                             <ContentPresenter HorizontalAlignment="Center" 
                                               VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#B22222"/>
-                                <Setter TargetName="border" Property="BorderBrush" Value="#CD5C5C"/>
+                                <Setter TargetName="border" Property="Background" Value="#D64539"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#E74C3C"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#FF0000"/>
+                                <Setter TargetName="border" Property="Background" Value="#C0392B"/>
                                 <Setter TargetName="border" Property="BorderBrush" Value="#FFD700"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
@@ -134,16 +135,22 @@
                 </StackPanel>
             </StackPanel>
 
-            <!-- Force Stop Button in Header -->
-            <Button Grid.Column="2" 
-                    Style="{StaticResource ForceStopButtonStyle}"
-                    Width="80" 
-                    Height="45"
-                    FontSize="11"
-                    ToolTip="FORCE STOP (Emergency)"
-                    Command="{Binding ForceStopCommand}">
-                <TextBlock Text="FORCE&#x0a;STOP" TextAlignment="Center"/>
-            </Button>
+            <!-- Force Stop Button in Header: red CIRCLE inside a square frame (like the web UI) -->
+            <Border Grid.Column="2"
+                    BorderBrush="#4A5568"
+                    BorderThickness="1"
+                    CornerRadius="4"
+                    Padding="4"
+                    VerticalAlignment="Center">
+                <Button Style="{StaticResource ForceStopButtonStyle}"
+                        Width="54"
+                        Height="54"
+                        FontSize="10"
+                        ToolTip="FORCE STOP (Emergency)"
+                        Command="{Binding ForceStopCommand}">
+                    <TextBlock Text="FORCE&#x0a;STOP" TextAlignment="Center"/>
+                </Button>
+            </Border>
 
             <!-- Reset Error Button in Header (only visible when STATUS = ERROR) -->
             <Button Grid.Column="3"
