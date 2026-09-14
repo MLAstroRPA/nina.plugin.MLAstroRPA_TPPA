@@ -329,14 +329,12 @@
                         <TextBlock Text="Relative (Step)" VerticalAlignment="Center" FontWeight="Bold"/>
                     </StackPanel>
 
-                    <!-- Relative Steps (visible only in Relative mode) -->
-                    <Border BorderBrush="Gray" BorderThickness="1" Padding="10" Margin="0,0,0,15"
-                            Visibility="{Binding RelativeOptionsVisibility}"
-                            HorizontalAlignment="Center">
-                        <WrapPanel>
+                    <!-- Relative Steps (visible only in Relative mode) — NO frame, NO Deg/Min/Sec labels -->
+                    <WrapPanel Margin="0,0,0,15"
+                               Visibility="{Binding RelativeOptionsVisibility}"
+                               HorizontalAlignment="Center">
                             <!-- Degrees -->
                             <StackPanel Margin="0,0,15,0">
-                                <TextBlock Text="Degrees" HorizontalAlignment="Center" FontSize="11" Margin="0,0,0,5"/>
                                 <StackPanel Orientation="Horizontal">
                                     <Button Content="-" Width="30" 
                                             PreviewMouseDown="OnRelativeDegreesDecDown" 
@@ -366,7 +364,6 @@
 
                             <!-- Minutes -->
                             <StackPanel Margin="0,0,15,0">
-                                <TextBlock Text="Minutes" HorizontalAlignment="Center" FontSize="11" Margin="0,0,0,5"/>
                                 <StackPanel Orientation="Horizontal">
                                     <Button Content="-" Width="30" 
                                             PreviewMouseDown="OnRelativeMinutesDecDown" 
@@ -396,7 +393,6 @@
 
                             <!-- Seconds -->
                             <StackPanel>
-                                <TextBlock Text="Seconds" HorizontalAlignment="Center" FontSize="11" Margin="0,0,0,5"/>
                                 <StackPanel Orientation="Horizontal">
                                     <Button Content="-" Width="30" 
                                             PreviewMouseDown="OnRelativeSecondsDecDown" 
@@ -423,8 +419,7 @@
                                             IsEnabled="{Binding CanManualControl}"/>
                                 </StackPanel>
                             </StackPanel>
-                        </WrapPanel>
-                    </Border>
+                    </WrapPanel>
 
                     <!-- Directional Pad -->
                     <Grid Width="320" Height="320" Margin="0,0,0,15" HorizontalAlignment="Center">
@@ -569,11 +564,11 @@
                         </Grid.RowDefinitions>
                         <TextBlock Grid.Column="0" Grid.Row="0" Text="Az Error:" FontWeight="SemiBold" Margin="0,0,15,5"/>
                         <WrapPanel Grid.Column="1" Grid.Row="0" Margin="0,0,20,5">
-                            <TextBox Text="{Binding AzErrorDeg, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="60" Margin="0,0,5,0" GotKeyboardFocus="OnAlignmentInputGotFocus"/>
+                            <TextBox Text="{Binding AzErrorDeg, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Tag="az" Width="60" Margin="0,0,5,0" GotKeyboardFocus="OnAlignmentInputGotFocus" KeyDown="OnAlignmentInputKeyDown"/>
                             <TextBlock Text="°" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                            <TextBox Text="{Binding AzErrorMin, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="60" Margin="0,0,5,0" GotKeyboardFocus="OnAlignmentInputGotFocus"/>
+                            <TextBox Text="{Binding AzErrorMin, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Tag="az" Width="60" Margin="0,0,5,0" GotKeyboardFocus="OnAlignmentInputGotFocus" KeyDown="OnAlignmentInputKeyDown"/>
                             <TextBlock Text="'" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                            <TextBox Text="{Binding AzErrorSec, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="60" Margin="0,0,5,0" GotKeyboardFocus="OnAlignmentInputGotFocus"/>
+                            <TextBox Text="{Binding AzErrorSec, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Tag="az" Width="60" Margin="0,0,5,0" GotKeyboardFocus="OnAlignmentInputGotFocus" KeyDown="OnAlignmentInputKeyDown"/>
                             <TextBlock Text='"' VerticalAlignment="Center"/>
                         </WrapPanel>
                         <StackPanel Grid.Column="2" Grid.RowSpan="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,20,0">
@@ -596,11 +591,11 @@
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Text="Alt Error:" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,15,0"/>
                         <WrapPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,20,0">
-                            <TextBox Text="{Binding AltErrorDeg, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="60" Margin="0,0,5,0" GotKeyboardFocus="OnAlignmentInputGotFocus"/>
+                            <TextBox Text="{Binding AltErrorDeg, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Tag="alt" Width="60" Margin="0,0,5,0" GotKeyboardFocus="OnAlignmentInputGotFocus" KeyDown="OnAlignmentInputKeyDown"/>
                             <TextBlock Text="°" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                            <TextBox Text="{Binding AltErrorMin, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="60" Margin="0,0,5,0" GotKeyboardFocus="OnAlignmentInputGotFocus"/>
+                            <TextBox Text="{Binding AltErrorMin, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Tag="alt" Width="60" Margin="0,0,5,0" GotKeyboardFocus="OnAlignmentInputGotFocus" KeyDown="OnAlignmentInputKeyDown"/>
                             <TextBlock Text="'" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                            <TextBox Text="{Binding AltErrorSec, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="60" Margin="0,0,5,0" GotKeyboardFocus="OnAlignmentInputGotFocus"/>
+                            <TextBox Text="{Binding AltErrorSec, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Tag="alt" Width="60" Margin="0,0,5,0" GotKeyboardFocus="OnAlignmentInputGotFocus" KeyDown="OnAlignmentInputKeyDown"/>
                             <TextBlock Text='"' VerticalAlignment="Center"/>
                         </WrapPanel>
                         <StackPanel Grid.Column="2" HorizontalAlignment="Center" Margin="0,0,20,0">

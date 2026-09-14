@@ -319,6 +319,23 @@ namespace MLAstro_Robotic_Polar_Alignment.Dockables
             (DataContext as PolarAlignmentDockVM)?.StartEditingAlignment();
         }
 
+        /// <summary>
+        /// Enter trong ô DMS (Az/Alt Error) → gửi ngay giá trị sai số của trục đó xuống firmware
+        /// (firmware ghi FRAM + broadcast cho web UI). Không nhấn Enter thì giá trị vẫn được gửi
+        /// khi bấm nút Align như trước. Trục lấy từ Tag="az"/"alt" của TextBox.
+        /// </summary>
+        private void OnAlignmentInputKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key != Key.Enter)
+            {
+                return;
+            }
+
+            var axis = (sender as FrameworkElement)?.Tag as string;
+            (DataContext as PolarAlignmentDockVM)?.SendAlignmentAxisError(axis);
+            e.Handled = true;
+        }
+
         #endregion
     }
 }

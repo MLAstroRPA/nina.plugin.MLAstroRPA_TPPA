@@ -687,6 +687,25 @@ namespace MLAstro_Robotic_Polar_Alignment.Dockables
         }
 
         /// <summary>
+        /// Gửi NGAY giá trị sai số của MỘT trục — dùng khi user nhấn Enter trong ô DMS
+        /// (không cần đợi bấm Align). Firmware chỉ ghi FRAM + broadcast cho các client khác
+        /// (web UI), KHÔNG chạy motor.
+        /// </summary>
+        public void SendAlignmentAxisError(string axis)
+        {
+            if (string.Equals(axis, "alt", StringComparison.OrdinalIgnoreCase))
+            {
+                SendCommand($"AlED:{_altErrorDeg},AlEM:{_altErrorMin},AlES:{_altErrorSec},AlDi:{(_altErrorUp ? 1 : 0)}\n");
+                Logger.Info("[MLAstro] Sent ALT alignment error (Enter)");
+            }
+            else
+            {
+                SendCommand($"AzED:{_azErrorDeg},AzEM:{_azErrorMin},AzES:{_azErrorSec},AzDi:{(_azErrorRight ? 1 : 0)}\n");
+                Logger.Info("[MLAstro] Sent AZ alignment error (Enter)");
+            }
+        }
+
+        /// <summary>
         /// Toggle between Modify and Done modes
         /// </summary>
         private void OnToggleModify()
