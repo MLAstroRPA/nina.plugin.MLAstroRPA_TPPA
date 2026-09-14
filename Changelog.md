@@ -188,6 +188,21 @@
 `MLAstroRPA-navigation/Plugin/MLAstroController.cs`, `MLAstroRPA-navigation/Plugin/MLAstroOptions.xaml`,
 `MLAstroRPA-navigation/Settings/PluginSettings.cs`
 
+### MLAstroRPA — Reboot / Reset ESP32 over Wireless now behaves like the Web UI button
+
+- **Fixed: the reset button did nothing over Wireless (PC client).** Two causes: the text token
+  `reboot` had no translator mapping (it was swallowed and never reached the device), and the service
+  sent `releaseControl` *before* the reboot — once control is released the client is no longer the PC
+  controller, so the firmware answers `{"status":"locked"}` and refuses to restart.
+- The button now sends `{"cmd":"reboot"}` directly, exactly like the Web UI REBOOT button: the device
+  logs `System Rebooting command received...`, broadcasts `sys_status: REBOOTING`, restarts after
+  500 ms, and the plugin reconnects on its own. The Serial path still uses the DTR/RTS pulse without
+  closing the COM port.
+- The translator also maps a bare `reboot` token to `{"cmd":"reboot"}`, so any text-protocol caller
+  gets the same behaviour as `Save&Reboot`.
+
+**Files:** `MLAstroRPA-implement/Services/MlastroWebSocketService.cs`
+
 ## 2.0.2.0
 
 ### MLAstroRPA — dockable layout cleanup

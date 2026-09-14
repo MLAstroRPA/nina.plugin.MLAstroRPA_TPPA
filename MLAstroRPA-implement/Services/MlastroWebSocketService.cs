@@ -392,18 +392,27 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
             }
         }
 
+        /// <summary>
+        /// Reboot thiết bị qua WebSocket — hoạt động ĐÚNG như nút REBOOT trên Web UI: gửi
+        /// <c>{"cmd":"reboot"}</c> để firmware broadcast <c>sys_status=REBOOTING</c> rồi <c>ESP.restart()</c>.
+        /// ⚠ KHÔNG gửi <c>releaseControl</c> trước đó: sau khi nhả quyền, client không còn là
+        /// PC-controller nên firmware từ chối lệnh reboot (trả "locked") ⇒ nút Reset ESP32 trên
+        /// đường Wireless im lặng không làm gì. Reboot tự xoá phiên PC ở phía thiết bị nên không cần nhả.
+        /// </summary>
         public bool ResetEsp32()
         {
             if (!IsConnected) return false;
-
-            // Nhả quyền TRƯỚC khi reboot: firmware giải phóng phiên PC ngay (web mở khóa), nếu không
-            // phiên cũ vẫn được giữ ở phía device ⇒ lần kết nối lại có thể bị từ chối
-            // "Another PC session is already in control" cho tới khi socket cũ hết keepalive (~15 s).
-            try { SendJsonAsync("{\"cmd\":\"releaseControl\"}", CancellationToken.None).GetAwaiter().GetResult(); } catch { }
-
-            Send("reboot");
-            AppendLog("Reboot command sent (wireless).");
-            return true;
+            try
+            {
+                SendJsonAsync("{\"cmd\":\"reboot\"}", CancellationToken.None).GetAwaiter().GetResult();
+                AppendLog("Reboot command sent (wireless).");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"[MLAstro][WS] reboot command failed: {ex.Message}");
+                return false;
+            }
         }
 
         public bool QueryTelemetry() => IsConnected; // firmware tự đẩy telemetry ~250 ms
@@ -1165,6 +1174,15 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
             if (tokens.TryGetValue("Disconnect", out _))
             {
                 outgoing.Add("{\"cmd\":\"releaseControl\"}");
+                return outgoing;
+            }
+
+            // `reboot` (giao thức text) → `{"cmd":"reboot"}`, giống hệt nút REBOOT trên Web UI.
+            // Trước đây token này KHÔNG được map nên bị nuốt ⇒ nút Reset ESP32 trên đường Wireless
+            // không reboot được thiết bị (chỉ đường Serial dùng xung RST mới chạy).
+            if (tokens.ContainsKey("reboot"))
+            {
+                outgoing.Add("{\"cmd\":\"reboot\"}");
                 return outgoing;
             }
 
