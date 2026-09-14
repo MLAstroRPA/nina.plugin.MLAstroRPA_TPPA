@@ -52,6 +52,15 @@
 ### MLAstroRPA — Relative distance by keyboard
 - Type D/M/S directly in the dock and web UI: degrees 0–5, minutes/seconds 0–59 (clamped, Enter sends)
 
+### MLAstroRPA — Dock / options UI restyle
+- Movement pad: the four direction buttons are rounded triangles with the Alt/Az label centred on the triangle's centroid; STOP is a centred square button
+- Speed Level buttons are circles (40×40); the header FORCE STOP is a red circle inside a square frame (same look as the web UI)
+- Relative steppers: removed the surrounding frame and the Degrees/Minutes/Seconds labels (values are still typed, clamped and sent on Enter)
+
+### MLAstroRPA — Align error values shared instantly (dock <-> Web UI)
+- Pressing **Enter** in an Az/Alt error field sends that axis' D/M/S + direction to the device right away (no need to press an Align button first)
+- The device now broadcasts the align D/M/S + direction to every WebSocket client, so the Web UI mirrors the values changed from the dock/Serial without a page refresh
+
 ## 2.0.2.0
 
 ### MLAstroRPA — dockable layout cleanup
