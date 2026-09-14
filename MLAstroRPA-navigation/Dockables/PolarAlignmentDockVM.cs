@@ -254,19 +254,34 @@ namespace MLAstro_Robotic_Polar_Alignment.Dockables
         public int RelativeDegrees
         {
             get => _relativeDegrees;
-            set => SetProperty(ref _relativeDegrees, Math.Max(0, Math.Min(2, value)));
+            // Giới hạn theo yêu cầu: độ 0-5, phút 0-59, giây 0-59 (nhập từ bàn phím hay nút +/- đều bị ép).
+            set
+            {
+                SetProperty(ref _relativeDegrees, Math.Max(0, Math.Min(5, value)));
+                // Raise lại kể cả khi giá trị bị ép về đúng giá trị cũ: người dùng gõ số vượt giới hạn
+                // (vd "6" khi đang là 5) mà không raise thì TextBox vẫn hiển thị số sai.
+                OnPropertyChanged();
+            }
         }
 
         public int RelativeMinutes
         {
             get => _relativeMinutes;
-            set => SetProperty(ref _relativeMinutes, Math.Max(0, Math.Min(60, value)));
+            set
+            {
+                SetProperty(ref _relativeMinutes, Math.Max(0, Math.Min(59, value)));
+                OnPropertyChanged();
+            }
         }
 
         public int RelativeSeconds
         {
             get => _relativeSeconds;
-            set => SetProperty(ref _relativeSeconds, Math.Max(0, Math.Min(60, value)));
+            set
+            {
+                SetProperty(ref _relativeSeconds, Math.Max(0, Math.Min(59, value)));
+                OnPropertyChanged();
+            }
         }
 
         /// <summary>

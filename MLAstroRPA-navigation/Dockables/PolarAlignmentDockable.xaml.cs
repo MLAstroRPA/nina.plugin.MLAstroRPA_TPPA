@@ -190,6 +190,48 @@ namespace MLAstro_Robotic_Polar_Alignment.Dockables
 
         #region Relative Settings Event Handlers
 
+        /// <summary>Chỉ cho nhập CHỮ SỐ vào ô Relative D/M/S (giới hạn 0-5 / 0-59 / 0-59 do ViewModel ép).</summary>
+        private void OnRelativeDigitsOnly(object sender, TextCompositionEventArgs e)
+        {
+            foreach (var c in e.Text)
+            {
+                if (!char.IsDigit(c))
+                {
+                    e.Handled = true;
+                    return;
+                }
+            }
+        }
+
+        /// <summary>Enter trong ô D/M/S = chốt giá trị và gửi xuống thiết bị (giống thả nút +/-).</summary>
+        private void OnRelativeKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key != Key.Enter && e.Key != Key.Return)
+            {
+                return;
+            }
+
+            e.Handled = true;
+            var vm = DataContext as PolarAlignmentDockVM;
+            if (vm == null)
+            {
+                return;
+            }
+
+            switch ((sender as FrameworkElement)?.Tag as string)
+            {
+                case "deg": vm.SendRelativeDegrees(); break;
+                case "min": vm.SendRelativeMinutes(); break;
+                case "sec": vm.SendRelativeSeconds(); break;
+            }
+        }
+
+        /// <summary>Bắt đầu sửa bằng bàn phím ⇒ tạm dừng đồng bộ telemetry (giống khi bấm nút +/-).</summary>
+        private void OnRelativeFieldGotFocus(object sender, KeyboardFocusChangedEventArgs e)
+        {
+            (DataContext as PolarAlignmentDockVM)?.StartEditingRelative();
+        }
+
         // Degrees
         private void OnRelativeDegreesIncDown(object sender, MouseButtonEventArgs e)
         {
