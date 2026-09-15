@@ -10,6 +10,8 @@ param(
     # File markdown chứa MÔ TẢ RELEASE (tùy chọn). Nếu truyền, nội dung file được dùng NGUYÊN VĂN làm
     # release notes trên GitHub thay cho notes mặc định ngắn gọn — dùng cho flow agent tự viết
     # description chi tiết (xem skill `release-repo`).
+    # Khi chạy TAY (không -NotesFile, không -Yes) script hiện MENU cho chọn 1 file trong
+    # Installer\MSI\ReleaseNotes\ bằng phím UP/DOWN + ENTER (ESC = dùng notes mặc định).
     [string]$NotesFile = "",
     # Bỏ qua câu hỏi xác nhận tương tác ⇒ dùng khi chạy tự động trong phiên chat/CI.
     [switch]$Yes
@@ -38,6 +40,97 @@ function Get-NewestMsi {
             if ($_.Name -match $msiNamePattern) { [version]$matches[1] } else { [version]"0.0.0.0" }
         } } -Descending |
         Select-Object -First 1
+}
+
+# ========== INTERACTIVE RELEASE-NOTES PICKER ==========
+# Khi nguoi dung TU CHAY task "GIT: Release Repo" (khong truyen -NotesFile va khong -Yes), hien menu
+# cho chon 1 file .md trong Installer\MSI\ReleaseNotes bang phim UP/DOWN + ENTER.
+# Tra ve duong dan file duoc chon; "" neu bo qua (ESC) hoac folder khong co file .md nao.
+# Neu console khong ho tro ReadKey (output bi redirect) thi tu dong chuyen sang nhap so thu tu.
+function Select-ReleaseNotesFile {
+    param(
+        [string]$Folder,
+        [string]$PreferredName = ""   # vd "v2.1.0.0.md": file khop version hien tai duoc dua len dau
+    )
+
+    $files = @(Get-ChildItem -Path $Folder -Filter "*.md" -File -ErrorAction SilentlyContinue |
+        Sort-Object -Property LastWriteTime -Descending)
+    if ($files.Count -eq 0) { return "" }
+
+    if ($PreferredName) {
+        $pref = $files | Where-Object { $_.Name -ieq $PreferredName } | Select-Object -First 1
+        if ($pref) {
+            $files = @($pref) + @($files | Where-Object { $_.Name -ine $PreferredName })
+        }
+    }
+
+    # Nhan hien thi: "<ten file>  |  <dong tieu de dau tien cua file>"
+    $width = 100
+    try { $width = [Math]::Max(60, [Console]::WindowWidth - 4) } catch { }
+    $labels = New-Object System.Collections.Generic.List[string]
+    foreach ($f in $files) {
+        $title = ""
+        $firstLine = @(Get-Content -Path $f.FullName -TotalCount 20 -ErrorAction SilentlyContinue |
+            Where-Object { $_.Trim() })[0]
+        if ($firstLine) { $title = ($firstLine.Trim() -replace '^#+\s*', '') }
+        $label = if ($title) { "$($f.Name)  |  $title" } else { $f.Name }
+        if ($label.Length -gt ($width - 6)) { $label = $label.Substring(0, $width - 6) + "..." }
+        $labels.Add($label)
+    }
+
+    Write-Host ""
+    Write-Host "SELECT RELEASE NOTES" -ForegroundColor Cyan
+    Write-Host "  UP/DOWN to move, ENTER to select, ESC to skip (use the default short notes)." -ForegroundColor DarkGray
+
+    $count = $files.Count
+    $selected = 0
+
+    try {
+        # ---- console that: ve menu tai cho, doc tung phim bam ----
+        $top = [Console]::CursorTop
+        for ($i = 0; $i -lt $count; $i++) {
+            $line = ("   " + $labels[$i]).PadRight($width)
+            if ($i -eq $selected) { Write-Host $line -ForegroundColor Black -BackgroundColor Cyan }
+            else { Write-Host $line }
+        }
+
+        $done = $false
+        $chosen = ""
+        while (-not $done) {
+            $key = [Console]::ReadKey($true)
+            if ($key.Key -eq [ConsoleKey]::UpArrow) {
+                $selected = if ($selected -gt 0) { $selected - 1 } else { $count - 1 }
+            } elseif ($key.Key -eq [ConsoleKey]::DownArrow) {
+                $selected = if ($selected -lt $count - 1) { $selected + 1 } else { 0 }
+            } elseif ($key.Key -eq [ConsoleKey]::Enter) {
+                $chosen = $files[$selected].FullName
+                $done = $true
+            } elseif ($key.Key -eq [ConsoleKey]::Escape) {
+                $chosen = ""
+                $done = $true
+            }
+            [Console]::SetCursorPosition(0, $top)
+            for ($i = 0; $i -lt $count; $i++) {
+                $line = ("   " + $labels[$i]).PadRight($width)
+                if ($i -eq $selected) { Write-Host $line -ForegroundColor Black -BackgroundColor Cyan }
+                else { Write-Host $line }
+            }
+        }
+
+        Write-Host ""
+        if ($chosen) { Write-Host "Selected: $(Split-Path $chosen -Leaf)" -ForegroundColor Green }
+        else { Write-Host "No notes file selected - using the default short notes." -ForegroundColor Gray }
+        return $chosen
+    } catch {
+        # ---- fallback: danh sach danh so + Read-Host ----
+        for ($i = 0; $i -lt $count; $i++) { Write-Host ("  [{0}] {1}" -f ($i + 1), $labels[$i]) }
+        $answer = Read-Host "  Type the number of the notes file to use (ENTER = skip)"
+        if ($answer -match '^\d+$') {
+            $idx = [int]$answer - 1
+            if ($idx -ge 0 -and $idx -lt $count) { return $files[$idx].FullName }
+        }
+        return ""
+    }
 }
 
 Write-Host "============================================" -ForegroundColor Cyan
@@ -284,6 +377,29 @@ if ($CreateRelease) {
         Write-Host "WARNING: -Repo ($Repo) differs from the git remote ($detectedRepo)." -ForegroundColor Yellow
     }
 
+    # ---------- RELEASE NOTES: chon file mo ta ----------
+    # Chay tay (khong -NotesFile, khong -Yes): hien menu cho chon 1 file trong Installer\MSI\ReleaseNotes\.
+    # File khop "v<version>.md" duoc highlight san. ESC = dung notes mac dinh ngan gon.
+    $notes = "Release v$Version`n`nView README.md to know how to install.`n`n`"NINA.Plugins.MLAstroRPA_TPPA.dll`" is the merged MLAstroRPA+TPPA plugin (MLAstro hardware control + Three Point Polar Alignment)."
+    $useNotesFile = $false
+    $releaseNotesDir = Join-Path $MSIProjectDir "ReleaseNotes"
+
+    if (-not $NotesFile -and -not $Yes -and (Test-Path $releaseNotesDir)) {
+        $picked = Select-ReleaseNotesFile -Folder $releaseNotesDir -PreferredName "v$Version.md"
+        if ($picked) { $NotesFile = $picked }
+    }
+
+    # Mo ta chi tiet do agent/nguoi dung viet san (markdown) -> dung nguyen van.
+    if ($NotesFile) {
+        if (Test-Path $NotesFile) {
+            $notes = Get-Content -Path $NotesFile -Raw
+            $useNotesFile = $true
+            Write-Host "Using release notes from: $NotesFile ($($notes.Length) chars)" -ForegroundColor Gray
+        } else {
+            Write-Host "WARNING: -NotesFile not found ($NotesFile) - using the default notes." -ForegroundColor Yellow
+        }
+    }
+
     # Always confirm before publishing (guards against releasing to the wrong repo/version).
     # In release-only mode the confirm states that the shown version is the newest in Output.
     Write-Host ""
@@ -323,19 +439,6 @@ if ($CreateRelease) {
 
     Write-Host ""
     Write-Host "Creating GitHub release: $tag  (repo: $Repo)" -ForegroundColor Yellow
-    $notes = "Release v$Version`n`nView README.md to know how to install.`n`n`"NINA.Plugins.MLAstroRPA_TPPA.dll`" is the merged MLAstroRPA+TPPA plugin (MLAstro hardware control + Three Point Polar Alignment)."
-
-    # Mô tả chi tiết do agent/người dùng viết sẵn (markdown) → dùng nguyên văn.
-    $useNotesFile = $false
-    if ($NotesFile) {
-        if (Test-Path $NotesFile) {
-            $notes = Get-Content -Path $NotesFile -Raw
-            $useNotesFile = $true
-            Write-Host "Using release notes from: $NotesFile ($($notes.Length) chars)" -ForegroundColor Gray
-        } else {
-            Write-Host "WARNING: -NotesFile not found ($NotesFile) - using the default notes." -ForegroundColor Yellow
-        }
-    }
 
     # Tag PHAI tro dung commit dang build. Neu khong truyen --target, `gh release create` se tag
     # nhanh DEFAULT cua repo (vd `main`) => release v2.1.0.0 tung tro vao commit cu trong khi MSI
