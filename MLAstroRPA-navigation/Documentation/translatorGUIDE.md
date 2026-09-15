@@ -4,7 +4,9 @@ This document is a hand-off for the developer writing **any** client that contro
 **wirelessly**, without a COM port: an INDI driver, an ASCOM / Alpaca driver, a mobile or desktop app, a
 script, or another planetarium/automation tool. Nothing below is framework-specific — only the WebSocket
 JSON and the behaviour the firmware expects. It is based on the actual firmware protocol and on how the
-NINA plugin does it (`MlastroWebSocketService.cs`), whose logic can be copied as-is.
+NINA plugin does it
+([`MlastroWebSocketService.cs`](https://github.com/MLAstroRPA/nina.plugin.MLAstroRPA_TPPA/blob/main/MLAstroRPA-implement/Services/MlastroWebSocketService.cs)),
+whose logic can be copied as-is.
 
 > Sources of truth (read them, do not guess):
 > - `Websocket-protocol.md` — every `cmd` + all server→client frames (copy kept next to this guide)
@@ -163,7 +165,8 @@ never lock the system.
 
 ## 4. Command mapping: serial token → WebSocket JSON
 
-This is the complete, usable table (matches `Websocket-protocol.md` §1.4 and `MlastroWebSocketService.Translate`).
+This is the complete, usable table (matches `Websocket-protocol.md` §1.4 and
+[`MlastroWebSocketService.Translate`](https://github.com/MLAstroRPA/nina.plugin.MLAstroRPA_TPPA/blob/main/MLAstroRPA-implement/Services/MlastroWebSocketService.cs)).
 
 | Serial (text) | WebSocket (JSON) | Notes |
 | :--- | :--- | :--- |
@@ -193,7 +196,7 @@ This is the complete, usable table (matches `Websocket-protocol.md` §1.4 and `M
 ### 4.1 Config: serial key → JSON section/field
 
 Use exactly this table when building `saveConfig`/`applyConfig` payloads (source: `ConfigKeyMap` in
-`MlastroWebSocketService.cs`):
+[`MlastroWebSocketService.cs`](https://github.com/MLAstroRPA/nina.plugin.MLAstroRPA_TPPA/blob/main/MLAstroRPA-implement/Services/MlastroWebSocketService.cs)):
 
 | Serial | Section | Field | Type |
 | :--- | :--- | :--- | :--- |
