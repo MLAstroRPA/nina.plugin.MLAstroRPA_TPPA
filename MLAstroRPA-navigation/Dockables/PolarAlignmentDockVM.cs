@@ -1242,12 +1242,12 @@ namespace MLAstro_Robotic_Polar_Alignment.Dockables
 
         public void ForceStop()
         {
-            // E-STOP must also end any active jog watchdog. Otherwise a held jog keeps re-sending
+            // FORCE-STOP must also end any active jog watchdog. Otherwise a held jog keeps re-sending
             // ":1" right after the ESTOP, the firmware re-arms the far move(+-1e9) and the motor
-            // simply restarts - which looked like "E-STOP does not stop the motor".
+            // simply restarts - which looked like "FORCE-STOP does not stop the motor".
             StopJogMovement();
             SendCommand("ESTOP:1\n");
-            if (_serialService.IsExternalControlActive) _serialService.NotifyExternalStop("MLAstro E-STOP pressed");
+            if (_serialService.IsExternalControlActive) _serialService.NotifyExternalStop("MLAstro FORCE-STOP pressed");
         }
 
         public void StopJogMovement()

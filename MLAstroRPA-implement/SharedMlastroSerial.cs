@@ -23,7 +23,7 @@ namespace NINA.Plugins.PolarAlignment {
         // disconnected) và kênh State(false) đều có thể báo cùng một sự kiện ngắt.
         private volatile bool disconnectNotified;
 
-        /// <summary>Xảy ra khi MLAstro báo STOP/E-STOP/ngắt - TPPA phải dừng PA ngay.</summary>
+        /// <summary>Xảy ra khi MLAstro báo STOP/FORCE-STOP/ngắt - TPPA phải dừng PA ngay.</summary>
         public event Action StopRequested;
 
         public SharedMlastroSerial(MLAstroLink link) {
@@ -43,13 +43,14 @@ namespace NINA.Plugins.PolarAlignment {
 
         /// <summary>
         /// Notification nêu rõ NGUYÊN NHÂN: tín hiệu dừng/ngắt này đến từ plugin MLAstro
-        /// (kênh STOP - STOP/E-STOP bấm trên MLAstro, hoặc MLAstro đang ngắt cổng).
+        /// (kênh STOP - STOP/FORCE-STOP bấm trên MLAstro, hoặc MLAstro đang ngắt cổng).
         /// </summary>
         private void ShowExternalStopNotification(string reason) {
             try {
                 string message;
-                if (reason?.IndexOf("E-STOP", StringComparison.OrdinalIgnoreCase) >= 0) {
-                    message = "E-STOP pressed on MLAstro plugin - TPPA PA stopped.";
+                if (reason?.IndexOf("FORCE-STOP", StringComparison.OrdinalIgnoreCase) >= 0
+                    || reason?.IndexOf("E-STOP", StringComparison.OrdinalIgnoreCase) >= 0) {
+                    message = "FORCE-STOP pressed on MLAstro plugin - TPPA PA stopped.";
                 } else if (reason?.IndexOf("STOP", StringComparison.OrdinalIgnoreCase) >= 0) {
                     message = "STOP pressed on MLAstro plugin - TPPA PA stopped.";
                 } else if (reason?.IndexOf("disconnect", StringComparison.OrdinalIgnoreCase) >= 0) {

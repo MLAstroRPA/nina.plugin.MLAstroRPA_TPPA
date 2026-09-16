@@ -22,6 +22,12 @@
 - The connect toast and status now name the transport actually in use: *Successfully connected to MLAstroRPA over Serial (COM5)* / *… over Wireless (WebSocket @ MLastroRPA.local)*, so a Serial connection is never mistaken for a wireless one
 - Warning line next to the *Connection type* selector (orange ⚠️): switching Serial ↔ Wireless disconnects the current session (and stops an alignment in progress)
 
+### MLAstroRPA — Wireless: parity with Serial for the TPPA session
+- TPPA connecting over **Wireless** now takes the external-control lock, so the MLAstro plugin locks CONTROL / CONFIGURATION while TPPA holds the session (before: only the Serial session locked)
+- **STOP / FORCE STOP** pressed on MLAstro while TPPA runs over Wireless now reaches TPPA — the WebSocket notify path returned early when no external-stop listener was registered; TPPA now shows the toast and stops the whole PA routine (not just the current move)
+- MLAstro disconnecting the wireless session now shows *"Disconnected by MLAstro plugin - TPPA session closed."* (before: fully silent — only the Serial session notified)
+- Toast wording: *"FORCE-STOP pressed on MLAstro plugin - TPPA PA stopped."* (was `E-STOP`); the serial `ESTOP:1` command and the WS `forceStop` JSON are unchanged
+
 ## 2.1.0.0
 
 ### MLAstroRPA — Wireless connection (WebSocket over mDNS)

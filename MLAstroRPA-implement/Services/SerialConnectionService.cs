@@ -217,7 +217,7 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
         }
 
         /// <summary>
-        /// Bên MLAstro nhấn STOP/E-STOP giữa chừng (hoặc đang điều khiển ngoài):
+        /// Bên MLAstro nhấn STOP/FORCE-STOP giữa chừng (hoặc đang điều khiển ngoài):
         /// báo plugin ngoài (TPPA) phải DỪNG PA ngay lập tức.
         /// </summary>
         public void NotifyExternalStop(string reason)

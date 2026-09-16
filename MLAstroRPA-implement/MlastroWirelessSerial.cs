@@ -1,5 +1,6 @@
 using MLAstro_Robotic_Polar_Alignment.Services;
 using NINA.Core.Utility;
+using NINA.Core.Utility.Notification;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -24,6 +25,9 @@ namespace NINA.Plugins.PolarAlignment
         private readonly Queue<string> incoming = new();
         private readonly object sync = new();
         private bool open;
+        // Chỉ hiện ĐÚNG 1 notification "ngắt do MLAstro" cho mỗi phiên (kênh State và kênh STOP có
+        // thể báo cùng một sự kiện ngắt) — giống SharedMlastroSerial.
+        private volatile bool disconnectNotified;
 
         /// <summary>Báo cho driver TPPA dừng khẩn cấp khi link wireless đứt (thiết bị cũng đã tự dừng motor).</summary>
         public event Action<string>? StopRequested;
@@ -59,29 +63,148 @@ namespace NINA.Plugins.PolarAlignment
 
         public void Open()
         {
+            disconnectNotified = false;
             service.LineReceived += OnLineReceived;
             service.StopRequested += OnServiceStopRequested;
-            if (!service.EnsureExternalConnectedAsync().GetAwaiter().GetResult())
+            // Theo dõi MLAstro NGẮT phiên (bấm Disconnect bên plugin MLAstro, hoặc WS đứt) để báo cho
+            // user: trước đây đường wireless ngắt âm thầm, chỉ đường Serial có thông báo.
+            service.StateChanged += OnServiceStateChanged;
+
+            // PHẢI LẤY QUYỀN điều khiển (không chỉ "mở kết nối"): trước đây chỉ gọi
+            // EnsureExternalConnectedAsync ⇒ TPPA vào bằng Wireless mà plugin MLAstro vẫn MỞ KHOÁ
+            // CONTROL/CONFIGURATION (Serial thì khoá bình thường) — bug user báo 2026-09-16.
+            bool ok = false;
+            try
             {
+                // (1) Mở phiên WebSocket (nếu chưa) + đánh dấu đang điều khiển ở tầng WebSocket.
+                ok = service.BeginExternalControlAsync().GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"[MLAstroRPA] BeginExternalControl (wireless) failed: {ex.Message}");
+            }
+
+            if (ok)
+            {
+                // (2) Đồng bộ cờ external-control với SerialConnectionService (facade dùng chung):
+                //     nó set _externalControlActive + bắn listener cho MLAstroController ⇒ UI MLAstro
+                //     khoá CONTROL/CONFIGURATION ngay. Chỉ khi WS đã Connected thì nhánh này mới đi
+                //     theo transport wireless (không đụng tới cổng COM).
+                try
+                {
+                    var serialService = MLAstro_Robotic_Polar_Alignment.Services.SerialConnectionService.Instance;
+                    if (serialService != null && !serialService.BeginExternalControlAsync().GetAwaiter().GetResult())
+                    {
+                        Logger.Warning("[MLAstroRPA] Wireless: MLAstro external-control flag was not set (its UI may stay unlocked).");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warning($"[MLAstroRPA] Wireless: could not sync external control with MLAstro service: {ex.Message}");
+                }
+            }
+
+            if (!ok)
+            {
+                // Không giữ được quyền: nhả mọi cờ để MLAstro không bị kẹt khoá UI / dừng poll.
+                try { service.EndExternalControl(); } catch { }
                 service.LineReceived -= OnLineReceived;
                 service.StopRequested -= OnServiceStopRequested;
+                service.StateChanged -= OnServiceStateChanged;
                 throw new Exception($"Unable to connect to MLAstroRPA over wireless ({service.ConnectionStatus}).");
             }
 
             open = true;
-            Logger.Info("[MLAstroRPA] Wireless (WebSocket) transport opened for TPPA.");
+            Logger.Info("[MLAstroRPA] Wireless (WebSocket) transport opened for TPPA (external control active).");
         }
 
+        /// <summary>
+        /// Bên MLAstro nhấn STOP/FORCE-STOP giữa chừng - TPPA phải DỪNG PA ngay (giống đường Serial).
+        /// </summary>
         private void OnServiceStopRequested(string reason)
         {
+            Logger.Info($"[MLAstroRPA] STOP requested by MLAstro (wireless): {reason}");
+            ShowExternalStopNotification(reason);
+            // Dừng toàn bộ routine PA của TPPA (driver + executeCTS của Dockable).
+            try { PolarAlignmentPlugin.RequestStopFromExternal(reason); }
+            catch (Exception ex) { Logger.Error($"[MLAstroRPA] RequestStopFromExternal failed: {ex.Message}"); }
             try { StopRequested?.Invoke(reason); } catch { }
+        }
+
+        /// <summary>
+        /// MLAstro đóng phiên wireless (bấm Disconnect bên plugin MLAstro / WS đứt): báo RÕ nguyên nhân
+        /// cho user (trước đây hoàn toàn âm thầm) rồi dọn listener để lần Connect sau không lọt sự kiện cũ.
+        /// </summary>
+        private void OnServiceStateChanged(bool connected)
+        {
+            if (connected) { return; }
+
+            var wasOpen = open;
+            open = false;
+            Logger.Info("[MLAstroRPA] Wireless session marked closed (MLAstro disconnected).");
+
+            // 1 notification / phiên, tránh trùng với kênh STOP (cũng có thể báo "disconnect").
+            if (wasOpen && !disconnectNotified)
+            {
+                disconnectNotified = true;
+                try { Notification.ShowWarning("Disconnected by MLAstro plugin - TPPA session closed."); }
+                catch (Exception ex) { Logger.Error($"[MLAstroRPA] Notification failed: {ex.Message}"); }
+            }
+
+            service.LineReceived -= OnLineReceived;
+            service.StopRequested -= OnServiceStopRequested;
+            service.StateChanged -= OnServiceStateChanged;
+            lock (sync)
+            {
+                incoming.Clear();
+            }
+        }
+
+        /// <summary>Notification nêu rõ NGUYÊN NHÂN dừng/ngắt đến từ plugin MLAstro (giống SharedMlastroSerial).</summary>
+        private void ShowExternalStopNotification(string reason)
+        {
+            try
+            {
+                string message;
+                if (reason?.IndexOf("FORCE-STOP", StringComparison.OrdinalIgnoreCase) >= 0
+                    || reason?.IndexOf("E-STOP", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    message = "FORCE-STOP pressed on MLAstro plugin - TPPA PA stopped.";
+                }
+                else if (reason?.IndexOf("STOP", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    message = "STOP pressed on MLAstro plugin - TPPA PA stopped.";
+                }
+                else if (reason?.IndexOf("disconnect", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    // Kênh State(false) sẽ hiện notification (1 lần) - tránh 2 toast cho cùng sự kiện.
+                    message = "Disconnected by MLAstro plugin - TPPA session closed.";
+                    disconnectNotified = true;
+                }
+                else
+                {
+                    message = $"Stopped by MLAstro plugin ({reason}).";
+                }
+
+                Notification.ShowWarning(message);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"[MLAstroRPA] Notification failed: {ex.Message}");
+            }
         }
 
         public void Close()
         {
             service.LineReceived -= OnLineReceived;
             service.StopRequested -= OnServiceStopRequested;
+            service.StateChanged -= OnServiceStateChanged;
             open = false;
+            disconnectNotified = false;
+            // Trả quyền điều khiển để MLAstro MỞ KHOÁ UI (giống SharedMlastroSerial khi TPPA ngắt):
+            // cả cờ ở tầng WebSocket lẫn cờ của SerialConnectionService (nơi MLAstroController nghe).
+            try { service.EndExternalControl(); } catch { }
+            try { MLAstro_Robotic_Polar_Alignment.Services.SerialConnectionService.Instance?.EndExternalControl(); } catch { }
             lock (sync)
             {
                 incoming.Clear();

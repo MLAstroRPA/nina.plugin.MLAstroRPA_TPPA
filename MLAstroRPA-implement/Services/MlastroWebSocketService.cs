@@ -194,11 +194,19 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
             Logger.Info($"[MLAstro][WS] NotifyExternalStop: {reason}");
             List<Action<string>>? copy;
             lock (_stateLock) { copy = _externalStopListeners.Count > 0 ? _externalStopListeners.ToList() : null; }
-            if (copy == null) return;
-            foreach (var l in copy)
+            if (copy != null)
             {
-                try { l(reason); } catch { }
+                foreach (var l in copy)
+                {
+                    try { l(reason); } catch { }
+                }
             }
+
+            // LUÔN bắn event StopRequested — đây là kênh của transport TPPA-wireless
+            // (MlastroWirelessSerial đăng ký event này, KHÔNG đăng ký external-stop listener).
+            // Trước đây hàm return sớm khi chưa có external-stop listener ⇒ STOP/E-STOP bấm trên
+            // plugin MLAstro lúc TPPA đang chạy Wireless KHÔNG tới được TPPA (không toast, không
+            // dừng routine). Bug user báo 2026-09-16 (log chỉ có dòng NotifyExternalStop).
             try { StopRequested?.Invoke(reason); } catch { }
         }
 

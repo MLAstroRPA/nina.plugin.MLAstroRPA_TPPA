@@ -247,7 +247,7 @@ namespace NINA.Plugins.PolarAlignment.MLAstroRPA {
             return null;
         }
 
-        /// <summary>MLAstro báo STOP/E-STOP (hoặc ngắt) giữa chừng -> hủy PA đang chạy ngay.</summary>
+        /// <summary>MLAstro báo STOP/FORCE-STOP (hoặc ngắt) giữa chừng -> hủy PA đang chạy ngay.</summary>
         private void OnExternalStop() {
             Logger.Info("[MLAstroRPA] Aborting PA because MLAstro requested STOP.");
             try {
