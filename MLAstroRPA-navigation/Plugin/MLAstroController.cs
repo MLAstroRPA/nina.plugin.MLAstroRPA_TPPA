@@ -28,6 +28,10 @@ namespace MLAstro_Robotic_Polar_Alignment.Plugin
     {
         // Firmware MLAstroRPA chạy cố định 115200 8N1 - không cho người dùng chọn baudrate nữa.
         private const int SerialBaudRate = 115200;
+        // Wireless (WebSocket): AutoReconnect (sau Reset ESP32 / SAVE ALL) chỉ thử lại trong 1 khoảng
+        // CÓ HẠN này rồi báo lỗi - đủ cho firmware reboot + vào WiFi, nhưng địa chỉ sai thì không
+        // retry vô hạn. (Lần kết nối do người dùng bấm Connect đã tự giới hạn 5 s trong ConnectAsync.)
+        private const int WirelessReconnectWindowSeconds = 30;
 
         private readonly SerialConnectionService _serialConnectionService;
         private readonly PolarAlignmentDockVM _polarAlignmentDockVM;
@@ -151,6 +155,30 @@ namespace MLAstro_Robotic_Polar_Alignment.Plugin
             OnPropertyChanged(nameof(IsWirelessSettingsVisible));
             OnPropertyChanged(nameof(TransportModeIndex));
             RaiseConnectionProperties();
+        }
+
+        /// <summary>
+        /// Làm mới binding transport trên UI thread: Connection type có thể bị TPPA đổi từ luồng nền
+        /// (Connect chạy trong Task.Run) khi đường Wireless thất bại và phải fallback sang Serial.
+        /// </summary>
+        private void RaiseTransportPropertiesOnUiThread()
+        {
+            try
+            {
+                var dispatcher = Application.Current?.Dispatcher;
+                if (dispatcher != null && !dispatcher.CheckAccess())
+                {
+                    dispatcher.BeginInvoke(new Action(RaiseTransportProperties));
+                }
+                else
+                {
+                    RaiseTransportProperties();
+                }
+            }
+            catch
+            {
+                RaiseTransportProperties();
+            }
         }
 
         private void RaiseConnectionProperties()
@@ -697,7 +725,14 @@ namespace MLAstro_Robotic_Polar_Alignment.Plugin
                 }
                 else
                 {
-                    await _webSocketService.ConnectAsync();
+                    // Báo RÕ khi kết nối không dây thất bại (mDNS không resolve / sai địa chỉ) thay vì
+                    // im lặng để người dùng tưởng đã kết nối được.
+                    if (!await _webSocketService.ConnectAsync())
+                    {
+                        var wirelessReason = _webSocketService.ConnectionStatus;
+                        Logger.Warning($"[MLAstro] Wireless connect failed: {wirelessReason}");
+                        Notification.ShowWarning($"Wireless connection failed: {wirelessReason}");
+                    }
                 }
                 RaiseConnectionProperties();
                 return;
@@ -978,9 +1013,12 @@ namespace MLAstro_Robotic_Polar_Alignment.Plugin
                         await System.Threading.Tasks.Task.Delay(1000);
                     }
 
-                    for (int attempt = 0; attempt < 30; attempt++)
+                    // Chỉ thử lại trong WirelessReconnectWindowSeconds (30 s, đủ cho device reboot) rồi báo lỗi.
+                    var wirelessDeadline = DateTime.UtcNow.AddSeconds(WirelessReconnectWindowSeconds);
+
+                    for (int attempt = 0; ; attempt++)
                     {
-                        AutoReconnectStatus = $"Connecting... (attempt {attempt + 1}/30)";
+                        AutoReconnectStatus = $"Connecting... (attempt {attempt + 1})";
                         if (await _webSocketService.ConnectAsync())
                         {
                             AutoReconnectStatus = "Connected";
@@ -990,11 +1028,19 @@ namespace MLAstro_Robotic_Polar_Alignment.Plugin
                             return;
                         }
 
-                        await System.Threading.Tasks.Task.Delay(1000);
+                        // Hết thời gian thử lại (30 s, đủ cho reboot) → báo lỗi kèm lý do, KHÔNG thử vô hạn.
+                        if (DateTime.UtcNow >= wirelessDeadline)
+                        {
+                            break;
+                        }
+
+                        await System.Threading.Tasks.Task.Delay(500);
                     }
 
                     AutoReconnectStatus = string.Empty;
-                    ShowConnectionError();
+                    var reconnectReason = _webSocketService.ConnectionStatus;
+                    Logger.Warning($"[MLAstro] Wireless reconnect failed after {WirelessReconnectWindowSeconds}s: {reconnectReason}");
+                    ShowConnectionError(reconnectReason);
                     return;
                 }
 
@@ -1079,16 +1125,22 @@ namespace MLAstro_Robotic_Polar_Alignment.Plugin
             }
         }
 
-        private void ShowConnectionError()
+        private void ShowConnectionError(string detail = null)
         {
             try
             {
                 if (Application.Current?.Dispatcher != null)
                 {
+                    var message = "CANNOT CONNECTED TO MLAstroRPA HARDWARE";
+                    if (!string.IsNullOrWhiteSpace(detail))
+                    {
+                        message += $"\n\n{detail}";
+                    }
+
                     Application.Current.Dispatcher.Invoke(() =>
                     {
                         MessageBox.Show(
-                            "CANNOT CONNECTED TO MLAstroRPA HARDWARE",
+                            message,
                             "Connection Error",
                             MessageBoxButton.OK,
                             MessageBoxImage.Error);
@@ -1118,6 +1170,14 @@ namespace MLAstro_Robotic_Polar_Alignment.Plugin
                 _hasUserSettingsEdits = true;
                 _serialConnectionService.SuspendSettingsSync = true;
                 Logger.Info("[MLAstro] User settings edit detected - telemetry settings sync suspended");
+            }
+
+            if (string.IsNullOrEmpty(e.PropertyName) || e.PropertyName == nameof(PluginSettings.TransportMode))
+            {
+                // TPPA có thể TỰ chuyển Connection type về Serial khi đường Wireless thất bại → UI
+                // (ComboBox + khối cài đặt Serial/Wireless) phải đổi theo, kể cả khi sự kiện đến từ
+                // luồng nền (Connect của TPPA chạy trong Task.Run).
+                RaiseTransportPropertiesOnUiThread();
             }
 
             if (string.IsNullOrEmpty(e.PropertyName) || e.PropertyName == nameof(PluginSettings.ComPort))

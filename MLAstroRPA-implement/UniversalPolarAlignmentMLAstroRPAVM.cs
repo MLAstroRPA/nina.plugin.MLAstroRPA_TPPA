@@ -34,7 +34,26 @@ namespace NINA.Plugins.PolarAlignment.MLAstroRPA
         }
 #pragma warning restore CS0618
  
-        protected override IPolarAlignmentSystem CreateSystem() => new UniversalPolarAlignmentMLAstroRPA();
+        protected override IPolarAlignmentSystem CreateSystem() {
+            var system = new UniversalPolarAlignmentMLAstroRPA();
+            // Transport THỰC TẾ đã dùng (Serial COMx hay Wireless) hiện lên UI.
+            TestConnectStatus = system.ConnectionSummary ?? string.Empty;
+            return system;
+        }
+
+        /// <summary>
+        /// Toast kết nối: nói RÕ đang kết nối qua Serial hay Wireless; nếu driver phải fallback
+        /// transport (Wireless → Serial) thì hiện đúng thông báo fallback đó.
+        /// </summary>
+        public override string ConnectSuccessMessage {
+            get {
+                if (!(upa is UniversalPolarAlignmentMLAstroRPA driver)) { return base.ConnectSuccessMessage; }
+                if (!string.IsNullOrWhiteSpace(driver.ConnectReport)) { return driver.ConnectReport; }
+                return string.IsNullOrWhiteSpace(driver.TransportDescription)
+                    ? base.ConnectSuccessMessage
+                    : $"Successfully connected to {SystemName} over {driver.TransportDescription}";
+            }
+        }
         protected override string SystemName => "MLAstroRPA";
 
         public override bool DoAutomatedAdjustments {
@@ -206,6 +225,27 @@ namespace NINA.Plugins.PolarAlignment.MLAstroRPA
         private async Task TestConnectAsync()
         {
             Logger.Info($"[MLAstroRPA-TestConnect] CLICKED {DateTime.Now:HH:mm:ss.fff}");
+
+            // 0) Đang chọn Wireless: test LUÔN đường không dây trước. Nếu thất bại (mDNS không
+            //    resolve / sai địa chỉ) thì báo RÕ rồi mới quét cổng COM — trước đây nhánh Wireless
+            //    bị bỏ qua nên test luôn trả kết quả của đường Serial và không phản ánh lỗi wireless.
+            var settings = MLAstro_Robotic_Polar_Alignment.Settings.PluginSettings.Instance;
+            if (settings?.TransportMode == MLAstro_Robotic_Polar_Alignment.Settings.MlastroTransportMode.Wireless)
+            {
+                TestConnectStatus = $"Testing wireless connection to {settings.MlaHost}...";
+                var socketService = MLAstro_Robotic_Polar_Alignment.Services.MlastroWebSocketService.Instance;
+                if (socketService != null && await socketService.EnsureExternalConnectedAsync())
+                {
+                    TestConnectStatus = $"MLAstroRPA detected over wireless ({settings.MlaHost}): {socketService.ConnectionStatus}";
+                    Logger.Info($"[MLAstroRPA-TestConnect] Wireless OK: {socketService.ConnectionStatus}");
+                    return;
+                }
+
+                var wirelessReason = socketService?.ConnectionStatus
+                                     ?? "WebSocket service not initialised (open the plugin Options page once)";
+                TestConnectStatus = $"Wireless connection failed ({wirelessReason}). Trying to scan the serial (COM) connection...";
+                Logger.Warning($"[MLAstroRPA-TestConnect] {TestConnectStatus}");
+            }
 
             // 1) Ưu tiên dùng CHUNG cổng với plugin MLAstro (MLAstro là CHỦ cổng). Nếu MLAstro
             //    đang giữ cổng, test qua nó - mở cổng trực tiếp ở đây sẽ bị "port in use".

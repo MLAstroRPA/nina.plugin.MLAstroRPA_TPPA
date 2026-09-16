@@ -9,6 +9,19 @@
 > with MPL-2.0: retain the license and notices, credit the original author, and make the source
 > (including your modifications) available.
 
+## 2.1.1.0
+
+### MLAstroRPA — Wireless connect: clear failure + automatic Serial fallback
+- A failed wireless connect (mDNS/DNS not resolving, wrong device address, refused handshake) is now reported instead of being hidden by a silent Serial fallback: the toast/status says *"Wireless connection failed (…). Trying to scan the serial (COM) connection…"*
+- When the Serial fallback does find the device, the plugin **switches the Connection type back to Serial** on its own (CONNECTION tab selector follows immediately) and MLAstro stays the COM owner, so the UI/telemetry match the transport actually in use
+- Wireless connect now retries only a few times inside a 5 s window (per-attempt resolve/connect timeouts) and then fails with the reason, instead of retrying indefinitely on a bad address
+- Auto-reconnect over Wireless is bounded too (30 s so a device reboot can finish) and the error dialog shows the reason; the CONNECTION tab *Connect* button shows a warning toast when the wireless connect fails
+- TPPA **Test Connect** now tests the wireless transport first when Wireless is selected, before falling back to the COM scan
+
+### MLAstroRPA — CONNECTION tab / connect feedback
+- The connect toast and status now name the transport actually in use: *Successfully connected to MLAstroRPA over Serial (COM5)* / *… over Wireless (WebSocket @ MLastroRPA.local)*, so a Serial connection is never mistaken for a wireless one
+- Warning line next to the *Connection type* selector (orange ⚠️): switching Serial ↔ Wireless disconnects the current session (and stops an alignment in progress)
+
 ## 2.1.0.0
 
 ### MLAstroRPA — Wireless connection (WebSocket over mDNS)

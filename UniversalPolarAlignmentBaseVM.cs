@@ -38,6 +38,12 @@ namespace NINA.Plugins.PolarAlignment {
         public virtual string TestConnectStatus { get; protected set; } = string.Empty;
         public virtual NINA.Core.Utility.RelayCommand TestConnectCommand => null;
 
+        /// <summary>
+        /// Nội dung toast khi kết nối thành công. Subclass override để báo RÕ trường hợp transport
+        /// thật khác lựa chọn của người dùng (vd Wireless thất bại → đã fallback sang Serial).
+        /// </summary>
+        public virtual string ConnectSuccessMessage => $"Successfully connected to {SystemName}";
+
         public abstract bool DoAutomatedAdjustments { get; set; }
         public abstract double AutomatedAdjustmentSettleTime { get; set; }
         public abstract float XGearRatio { get; set; }
@@ -83,7 +89,7 @@ namespace NINA.Plugins.PolarAlignment {
                     // thông báo kết nối COM thành công luôn hiện rõ trên cùng.
                     await Application.Current.Dispatcher.InvokeAsync(() => {
                         Notification.CloseAll();
-                        Notification.ShowInformation($"Successfully connected to {SystemName}");
+                        Notification.ShowInformation(ConnectSuccessMessage);
                     });
                 } catch (Exception ex) {
                     Logger.Error(ex);

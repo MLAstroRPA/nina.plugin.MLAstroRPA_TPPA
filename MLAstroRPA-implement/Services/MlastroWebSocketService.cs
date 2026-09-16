@@ -38,6 +38,16 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
         private static readonly TimeSpan HandshakeTimeout = TimeSpan.FromSeconds(5);
         private static readonly TimeSpan ConfigAckTimeout = TimeSpan.FromSeconds(8);
 
+        // Chính sách THỬ LẠI khi kết nối: chỉ thử vài lần trong 1 khoảng NGẮN (mặc định 5 s) rồi
+        // báo failed. Địa chỉ sai / mDNS không resolve mà retry vô hạn thì UI treo và người dùng
+        // không bao giờ biết kết nối đã thất bại.
+        private static readonly TimeSpan ConnectAttemptWindow = TimeSpan.FromSeconds(5);
+        private static readonly TimeSpan ConnectRetryDelay = TimeSpan.FromMilliseconds(700);
+        // Timeout cho TỪNG lần: mDNS/DNS có thể treo lâu khi hostname sai, và TCP connect tới IP
+        // sai subnet có thể treo ~20 s.
+        private static readonly TimeSpan ResolveTimeout = TimeSpan.FromSeconds(2);
+        private static readonly TimeSpan ConnectAttemptTimeout = TimeSpan.FromSeconds(2);
+
         private readonly PluginSettings _settings;
         private readonly SerialConnectionService _serial;
         private readonly SemaphoreSlim _sendLock = new(1, 1);
@@ -218,39 +228,78 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
             HandshakeStatus = string.Empty;
             AppendLog($"Resolving {host} ...");
 
-            string endpointHost;
-            if (IPAddress.TryParse(host, out _))
+            // ---- Thử resolve + connect vài lần trong ConnectAttemptWindow rồi BÁO FAILED ----
+            var deadline = DateTime.UtcNow + ConnectAttemptWindow;
+            var isIpLiteral = IPAddress.TryParse(host, out _);
+            var attempt = 0;
+            string? lastError = null;
+            ClientWebSocket? socket = null;
+            Uri? uri = null;
+
+            while (socket == null)
             {
-                endpointHost = host;
-            }
-            else
-            {
-                var resolved = await ResolveMdnsAsync(host, token).ConfigureAwait(false);
-                if (resolved == null)
+                attempt++;
+
+                // Hết cửa sổ thử lại thì KHÔNG mở thêm lần nào nữa (nếu không, mỗi lần có thể chờ
+                // thêm ConnectAttemptTimeout → tổng thời gian vượt xa 5 s).
+                if (attempt > 1 && DateTime.UtcNow >= deadline) break;
+
+                string? endpointHost = null;
+
+                if (isIpLiteral)
                 {
-                    ConnectionStatus = $"Cannot resolve {host} (mDNS failed). Enter the device IP instead.";
-                    AppendLog($"ERROR: mDNS resolution failed for {host}. Use the IP address field fallback.");
-                    return false;
+                    endpointHost = host;
                 }
-                endpointHost = resolved.ToString();
-                AppendLog($"mDNS {host} -> {endpointHost}");
+                else
+                {
+                    ConnectionStatus = $"Resolving {host}... (attempt {attempt})";
+                    var resolved = await ResolveMdnsAsync(host, token).ConfigureAwait(false);
+                    if (resolved == null)
+                    {
+                        lastError = $"Cannot resolve {host} (mDNS/DNS failed).";
+                        AppendLog($"ERROR: {lastError} Enter the device IP instead.");
+                    }
+                    else
+                    {
+                        endpointHost = resolved.ToString();
+                        AppendLog($"mDNS {host} -> {endpointHost}");
+                    }
+                }
+
+                if (endpointHost != null)
+                {
+                    var candidateUri = new Uri($"ws://{endpointHost}:{port}{path}");
+                    var candidate = new ClientWebSocket();
+                    candidate.Options.KeepAliveInterval = TimeSpan.FromSeconds(15);
+
+                    try
+                    {
+                        ConnectionStatus = $"Connecting to {candidateUri.Host}:{port}... (attempt {attempt})";
+                        using var connectCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+                        connectCts.CancelAfter(ConnectAttemptTimeout);
+                        await candidate.ConnectAsync(candidateUri, connectCts.Token).ConfigureAwait(false);
+                        socket = candidate;
+                        uri = candidateUri;
+                    }
+                    catch (Exception ex)
+                    {
+                        candidate.Dispose();
+                        lastError = ex.Message;
+                        AppendLog($"ERROR: {ex.Message}");
+                        Logger.Warning($"[MLAstro][WS] Connect attempt {attempt} failed: {ex.Message}");
+                    }
+                }
+
+                if (socket != null) break;
+                if (DateTime.UtcNow >= deadline) break;
+                await Task.Delay(ConnectRetryDelay, token).ConfigureAwait(false);
             }
 
-            var uri = new Uri($"ws://{endpointHost}:{port}{path}");
-            var socket = new ClientWebSocket();
-            socket.Options.KeepAliveInterval = TimeSpan.FromSeconds(15);
-
-            try
+            if (socket == null)
             {
-                ConnectionStatus = $"Connecting to {uri.Host}:{port}...";
-                await socket.ConnectAsync(uri, token).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                socket.Dispose();
-                ConnectionStatus = $"Connect failed: {ex.Message}";
-                AppendLog($"ERROR: {ex.Message}");
-                Logger.Error($"[MLAstro][WS] Connect failed: {ex.Message}");
+                ConnectionStatus = $"Cannot connect to {host} (wireless failed after {attempt} attempt(s) / {ConnectAttemptWindow.TotalSeconds:0}s). {lastError}";
+                AppendLog($"ERROR: wireless connect failed - {lastError}");
+                Logger.Error($"[MLAstro][WS] Connect failed after {attempt} attempt(s) in {ConnectAttemptWindow.TotalSeconds:0}s: {lastError}");
                 return false;
             }
 
@@ -262,7 +311,8 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
             _handshakeTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             _receiveLoop = Task.Run(() => ReceiveLoopAsync(socket, _cts.Token));
 
-            AppendLog($"Connected to {uri.Host}:{port}{path}. Sending handshake '{HandshakeKey}'...");
+            var connectedHost = uri?.Host ?? host;
+            AppendLog($"Connected to {connectedHost}:{port}{path}. Sending handshake '{HandshakeKey}'...");
             await SendJsonAsync(BuildHandshake(), _cts.Token).ConfigureAwait(false);
 
             var completed = await Task.WhenAny(_handshakeTcs.Task, Task.Delay(HandshakeTimeout, _cts.Token)).ConfigureAwait(false);
@@ -279,13 +329,13 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
 
             IsConnected = true;
             HandshakeStatus = "OK!";
-            ConnectionStatus = $"Connected (wireless) - {uri.Host}";
+            ConnectionStatus = $"Connected (wireless) - {connectedHost}";
 
             // Phiên mới: xoá trạng thái lỗi còn sót (wireless không nhận dòng ERROR: như serial).
             try { _serial.ResetErrorStateForNewSession(); } catch { }
 
             AppendLog($"Handshake: OK! PC has control; Web UI locked (monitoring only).");
-            Logger.Info($"[MLAstro][WS] Connected and handshaked on {uri.Host}:{port}{path}");
+            Logger.Info($"[MLAstro][WS] Connected and handshaked on {connectedHost}:{port}{path}");
             return true;
         }
 
@@ -293,8 +343,11 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
         {
             try
             {
-                var task = Dns.GetHostAddressesAsync(host, token);
-                var addresses = await task.ConfigureAwait(false);
+                // DNS/mDNS có thể treo rất lâu khi hostname sai → chặn trong ResolveTimeout rồi
+                // trả null để vòng thử lại của ConnectAsync quyết định (thay vì treo vô hạn).
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(token);
+                cts.CancelAfter(ResolveTimeout);
+                var addresses = await Dns.GetHostAddressesAsync(host, cts.Token).ConfigureAwait(false);
                 return addresses?.FirstOrDefault(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
                        ?? addresses?.FirstOrDefault();
             }

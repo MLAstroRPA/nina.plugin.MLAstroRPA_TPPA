@@ -17,12 +17,23 @@
                     <StackPanel Margin="10">
                     <Grid>
                     <StackPanel Margin="10">                        <!-- Kiểu kết nối: CHỈ chọn 1 trong 2 (Serial hoặc Wireless). -->
-                        <StackPanel Width="220" Margin="0,0,0,10" HorizontalAlignment="Left">
+                        <StackPanel Margin="0,0,0,10" HorizontalAlignment="Left">
                             <TextBlock Text="Connection type" Margin="0,0,0,5" />
-                            <ComboBox SelectedIndex="{Binding TransportModeIndex, Mode=TwoWay}">
-                                <ComboBoxItem Content="Serial connection" />
-                                <ComboBoxItem Content="Wireless connection" />
-                            </ComboBox>
+                            <StackPanel Orientation="Horizontal">
+                                <ComboBox Width="220" SelectedIndex="{Binding TransportModeIndex, Mode=TwoWay}">
+                                    <ComboBoxItem Content="Serial connection" />
+                                    <ComboBoxItem Content="Wireless connection" />
+                                </ComboBox>
+                                <!-- Cảnh báo: đổi Connection type sẽ ngắt phiên đang mở (chỉ 1 transport giữ quyền). -->
+                                <TextBlock
+                                    Margin="10,0,0,0"
+                                    MaxWidth="430"
+                                    VerticalAlignment="Center"
+                                    Foreground="Orange"
+                                    TextWrapping="Wrap"
+                                    Text="⚠️ Switch connection will disconnect the current session."
+                                    ToolTip="Switching Serial ↔ Wireless always disconnects the transport in use, then connects the newly selected one." />
+                            </StackPanel>
                         </StackPanel>
 
                         <!-- ===== SERIAL SETTINGS (ẩn hoàn toàn khi chọn Wireless connection) ===== -->

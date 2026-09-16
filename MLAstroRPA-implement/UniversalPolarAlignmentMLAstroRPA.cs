@@ -1,4 +1,5 @@
 using NINA.Core.Utility;
+using NINA.Core.Utility.Notification;
 using System;
 using System.Globalization;
 using System.IO.Ports;
@@ -24,35 +25,99 @@ namespace NINA.Plugins.PolarAlignment.MLAstroRPA {
             }
         }
 
-        private bool TryOpenPreferred() {
-            // ---- Chế độ WIRELESS: dùng chung phiên WebSocket với plugin MLAstro ----
-            var transportMode = MLAstro_Robotic_Polar_Alignment.Settings.PluginSettings.Instance?.TransportMode
-                                ?? MLAstro_Robotic_Polar_Alignment.Settings.MlastroTransportMode.Serial;
-            if (transportMode == MLAstro_Robotic_Polar_Alignment.Settings.MlastroTransportMode.Wireless) {
-                try {
-                    var wireless = MLAstro_Robotic_Polar_Alignment.Services.MlastroWebSocketService.Instance;
-                    if (wireless == null) {
-                        Logger.Error("[MLAstroRPA] Wireless transport selected but WebSocket service is not initialised (open the plugin Options page once).");
-                        port = null;
-                        OpenAndValidate();
-                        return port != null;
-                    }
+        /// <summary>
+        /// Mô tả kết nối THỰC TẾ vừa thiết lập (vd Wireless thất bại → đã fallback sang Serial)
+        /// để VM hiển thị lên UI. Rỗng khi kết nối đúng transport người dùng đã chọn.
+        /// </summary>
+        public string ConnectReport { get; private set; } = string.Empty;
 
-                    var wirelessSerial = new MlastroWirelessSerial(wireless);
-                    wirelessSerial.StopRequested += reason => OnExternalStop();
-                    wirelessSerial.Open();
-                    AttachPort(wirelessSerial);
-                    UpdateStatus();
-                    Logger.Info($"[MLAstroRPA] Connected via wireless (WebSocket) to {wireless.ConfiguredAddress}");
+        /// <summary>
+        /// Transport THỰC TẾ đang dùng, dạng ngắn gọn để hiện lên toast/status:
+        /// "Serial (COM5)" hoặc "Wireless (WebSocket @ MLastroRPA.local)".
+        /// </summary>
+        public string TransportDescription { get; private set; } = string.Empty;
+
+        /// <summary>Mô tả 1 dòng cho UI: luôn nói RÕ đang kết nối qua Serial hay Wireless.</summary>
+        public string ConnectionSummary {
+            get {
+                if (!string.IsNullOrWhiteSpace(ConnectReport)) { return ConnectReport; }
+                return string.IsNullOrWhiteSpace(TransportDescription)
+                    ? string.Empty
+                    : $"Connected over {TransportDescription}";
+            }
+        }
+
+        private bool TryOpenPreferred() {
+            ConnectReport = string.Empty;
+
+            var settings = MLAstro_Robotic_Polar_Alignment.Settings.PluginSettings.Instance;
+            var transportMode = settings?.TransportMode
+                                ?? MLAstro_Robotic_Polar_Alignment.Settings.MlastroTransportMode.Serial;
+
+            // ---- Chế độ WIRELESS: dùng chung phiên WebSocket với plugin MLAstro ----
+            if (transportMode == MLAstro_Robotic_Polar_Alignment.Settings.MlastroTransportMode.Wireless) {
+                if (TryOpenWireless()) {
                     return true;
-                } catch (Exception ex) {
-                    Logger.Error($"[MLAstroRPA] Wireless connect failed: {ex.Message}");
-                    port = null;
-                    OpenAndValidate();
-                    return port != null;
                 }
+
+                // Wireless thất bại: phải BÁO RÕ cho người dùng rồi mới chuyển sang quét cổng COM.
+                // (Trước đây fallback im lặng nên UI vẫn báo kết nối thành công dù thực tế chạy Serial.)
+                var wsService = MLAstro_Robotic_Polar_Alignment.Services.MlastroWebSocketService.Instance;
+                var reason = wsService?.ConnectionStatus;
+                ConnectReport = $"Wireless connection failed ({reason}). Trying to scan the serial (COM) connection...";
+                Logger.Warning($"[MLAstroRPA] {ConnectReport}");
+                NotifyConnectStatus(ConnectReport, isError: true);
+
+                // Phiên WebSocket có thể đã mở nhưng không dùng được (vd không đọc nổi telemetry):
+                // đóng lại trước khi thử Serial để mỗi lúc chỉ còn MỘT transport sống.
+                try { if (wsService?.IsConnected == true) { wsService.Disconnect(); } }
+                catch (Exception ex) { Logger.Warning($"[MLAstroRPA] Could not close the failed wireless session: {ex.Message}"); }
             }
 
+            // Serial cũng thất bại → báo RÕ lý do (không để người dùng thấy mỗi "Unable to connect").
+            try {
+                return TryOpenSerialOwner(settings);
+            } catch (Exception ex) {
+                ConnectReport = string.IsNullOrWhiteSpace(ConnectReport)
+                    ? $"Serial connection failed: {ex.Message}"
+                    : $"Wireless connection failed and no serial (COM) device was found: {ex.Message}";
+                Logger.Error($"[MLAstroRPA] {ConnectReport}");
+                NotifyConnectStatus(ConnectReport, isError: true);
+                throw;
+            }
+        }
+
+        /// <summary>Mở phiên WIRELESS (WebSocket) dùng chung với plugin MLAstro.</summary>
+        private bool TryOpenWireless() {
+            try {
+                var wireless = MLAstro_Robotic_Polar_Alignment.Services.MlastroWebSocketService.Instance;
+                if (wireless == null) {
+                    Logger.Error("[MLAstroRPA] Wireless transport selected but WebSocket service is not initialised (open the plugin Options page once).");
+                    return false;
+                }
+
+                var wirelessSerial = new MlastroWirelessSerial(wireless);
+                wirelessSerial.StopRequested += reason => OnExternalStop();
+                wirelessSerial.Open();
+                AttachPort(wirelessSerial);
+                UpdateStatus();
+                TransportDescription = $"Wireless (WebSocket @ {wireless.ConfiguredAddress})";
+                Logger.Info($"[MLAstroRPA] Connected via wireless (WebSocket) to {wireless.ConfiguredAddress}");
+                return true;
+            } catch (Exception ex) {
+                Logger.Error($"[MLAstroRPA] Wireless connect failed: {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Mở kết nối SERIAL qua plugin MLAstro làm CHỦ cổng duy nhất:
+        ///  - MLAstro đang kết nối → mượn ngay (shared);
+        ///  - chưa kết nối → auto-detect cổng thiết bị rồi MỞ CHỦ qua MLAstro (115200) để MLAstro
+        ///    thành Connected &amp; monitor được, sau đó mượn. Không có MLAstro service (build
+        ///    standalone) thì TPPA tự quét &amp; mở cổng riêng.
+        /// </summary>
+        private bool TryOpenSerialOwner(MLAstro_Robotic_Polar_Alignment.Settings.PluginSettings settings) {
             MLAstroLink link;
             try { link = MLAstroLink.TryCreate(); } catch { link = null; }
 
@@ -60,6 +125,9 @@ namespace NINA.Plugins.PolarAlignment.MLAstroRPA {
             if (link == null) {
                 port = null;
                 OpenAndValidate();
+                var detectedPort = (port as LoggingSerialPort)?.PortName;
+                SetSerialTransportDescription(detectedPort);
+                SwitchToSerialTransport(settings, detectedPort);
                 return port != null;
             }
 
@@ -81,6 +149,8 @@ namespace NINA.Plugins.PolarAlignment.MLAstroRPA {
                         UpdateStatus();
                         if (Connected && !string.IsNullOrWhiteSpace(Status)) {
                             Logger.Info($"[MLAstroRPA] Connected via MLAstro (owner) on {portName}");
+                            SetSerialTransportDescription(portName);
+                            SwitchToSerialTransport(settings, portName);
                             return true;
                         }
                         Logger.Info("[MLAstroRPA] MLAstro shared session not usable; falling back to direct scan.");
@@ -96,7 +166,57 @@ namespace NINA.Plugins.PolarAlignment.MLAstroRPA {
             // Last resort (thực tế không xảy ra trong plugin merged): tự quét & mở cổng riêng.
             port = null;   // để OpenAndValidate() báo lỗi đúng nếu không tìm thấy thiết bị
             OpenAndValidate();
+            var fallbackPort = (port as LoggingSerialPort)?.PortName;
+            SetSerialTransportDescription(fallbackPort);
+            SwitchToSerialTransport(settings, fallbackPort);
             return port != null;
+        }
+
+        /// <summary>Ghi lại transport Serial đang dùng để toast/status nói rõ đang chạy cổng COM nào.</summary>
+        private void SetSerialTransportDescription(string portName) {
+            TransportDescription = string.IsNullOrWhiteSpace(portName) ? "Serial (COM)" : $"Serial ({portName})";
+        }
+
+        /// <summary>
+        /// Kết nối thực tế đang chạy trên cổng COM (kể cả khi người dùng chọn Wireless mà phải
+        /// fallback) → đồng bộ lại "Connection type" của plugin về Serial để UI/telemetry khớp với
+        /// transport thật đang dùng (cổng COM đã được MLAstro mở làm CHỦ, TPPA chỉ mượn).
+        /// </summary>
+        private void SwitchToSerialTransport(MLAstro_Robotic_Polar_Alignment.Settings.PluginSettings settings, string portName) {
+            if (settings == null
+                || settings.TransportMode == MLAstro_Robotic_Polar_Alignment.Settings.MlastroTransportMode.Serial) {
+                return;
+            }
+
+            try {
+                var portText = string.IsNullOrWhiteSpace(portName) ? string.Empty : $" on {portName}";
+                // Ghi vào profile/settings nên chạy trên UI thread (Connect của TPPA chạy trong Task.Run).
+                var dispatcher = System.Windows.Application.Current?.Dispatcher;
+                if (dispatcher != null && !dispatcher.CheckAccess()) {
+                    dispatcher.Invoke(() => settings.TransportMode = MLAstro_Robotic_Polar_Alignment.Settings.MlastroTransportMode.Serial);
+                } else {
+                    settings.TransportMode = MLAstro_Robotic_Polar_Alignment.Settings.MlastroTransportMode.Serial;
+                }
+                ConnectReport = $"Wireless connection failed. Connected over serial{portText} - connection type switched to Serial.";
+                Logger.Info($"[MLAstroRPA] Connection type switched to Serial because the wireless connection was not available{portText}.");
+                NotifyConnectStatus(ConnectReport, isError: false);
+            } catch (Exception ex) {
+                Logger.Error($"[MLAstroRPA] Could not switch the connection type to Serial: {ex.Message}");
+            }
+        }
+
+        /// <summary>Hiện toast trạng thái kết nối từ luồng nền (create system chạy trong Task.Run).</summary>
+        private static void NotifyConnectStatus(string message, bool isError) {
+            if (string.IsNullOrWhiteSpace(message)) { return; }
+            try {
+                var dispatcher = System.Windows.Application.Current?.Dispatcher;
+                if (dispatcher == null) { return; }
+                dispatcher.Invoke(() => {
+                    if (isError) { Notification.ShowWarning(message); } else { Notification.ShowInformation(message); }
+                });
+            } catch (Exception ex) {
+                Logger.Warning($"[MLAstroRPA] Could not show connection notification: {ex.Message}");
+            }
         }
 
         /// <summary>
