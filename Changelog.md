@@ -11,22 +11,23 @@
 
 ## 2.1.1.0
 
-### MLAstroRPA — Wireless connect: clear failure + automatic Serial fallback
-- A failed wireless connect (mDNS/DNS not resolving, wrong device address, refused handshake) is now reported instead of being hidden by a silent Serial fallback: the toast/status says *"Wireless connection failed (…). Trying to scan the serial (COM) connection…"*
-- When the Serial fallback does find the device, the plugin **switches the Connection type back to Serial** on its own (CONNECTION tab selector follows immediately) and MLAstro stays the COM owner, so the UI/telemetry match the transport actually in use
-- Wireless connect now retries only a few times inside a 5 s window (per-attempt resolve/connect timeouts) and then fails with the reason, instead of retrying indefinitely on a bad address
-- Auto-reconnect over Wireless is bounded too (30 s so a device reboot can finish) and the error dialog shows the reason; the CONNECTION tab *Connect* button shows a warning toast when the wireless connect fails
-- TPPA **Test Connect** now tests the wireless transport first when Wireless is selected, before falling back to the COM scan
+### MLAstroRPA — Wireless connect
+- Report a failed wireless connect (mDNS/DNS, wrong address, refused handshake) in the toast/status + log, then scan the serial (COM) connection
+- On a successful Serial fallback, switch the Connection type back to **Serial** automatically and keep MLAstro as the COM owner
+- Bound the wireless retry: a few attempts inside a 5 s window (per-attempt resolve/connect timeout), then fail with the reason
+- Cap Wireless auto-reconnect (after Reset ESP32) at 30 s and include the reason in the connection error dialog
+- Warning toast when the CONNECTION tab *Connect* fails over Wireless
 
-### MLAstroRPA — CONNECTION tab / connect feedback
-- The connect toast and status now name the transport actually in use: *Successfully connected to MLAstroRPA over Serial (COM5)* / *… over Wireless (WebSocket @ MLastroRPA.local)*, so a Serial connection is never mistaken for a wireless one
-- Warning line next to the *Connection type* selector (orange ⚠️): switching Serial ↔ Wireless disconnects the current session (and stops an alignment in progress)
+### MLAstroRPA — Connection UI
+- Name the transport in the connect toast/status: *Successfully connected to MLAstroRPA over Serial (COM5)* / *… over Wireless (WebSocket @ MLastroRPA.local)*
+- Orange ⚠️ warning next to the *Connection type* selector: switching Serial ↔ Wireless disconnects the current session
+- TPPA **Test Connect**: test the wireless transport first when Wireless is selected
 
-### MLAstroRPA — Wireless: parity with Serial for the TPPA session
-- TPPA connecting over **Wireless** now takes the external-control lock, so the MLAstro plugin locks CONTROL / CONFIGURATION while TPPA holds the session (before: only the Serial session locked)
-- **STOP / FORCE STOP** pressed on MLAstro while TPPA runs over Wireless now reaches TPPA — the WebSocket notify path returned early when no external-stop listener was registered; TPPA now shows the toast and stops the whole PA routine (not just the current move)
-- MLAstro disconnecting the wireless session now shows *"Disconnected by MLAstro plugin - TPPA session closed."* (before: fully silent — only the Serial session notified)
-- Toast wording: *"FORCE-STOP pressed on MLAstro plugin - TPPA PA stopped."* (was `E-STOP`); the serial `ESTOP:1` command and the WS `forceStop` JSON are unchanged
+### MLAstroRPA — Wireless parity with Serial (TPPA session)
+- TPPA connecting over Wireless now locks MLAstro CONTROL / CONFIGURATION (external-control)
+- STOP / FORCE STOP pressed on MLAstro during a wireless TPPA session now reaches TPPA (toast + the whole PA routine stops)
+- Notify *"Disconnected by MLAstro plugin - TPPA session closed."* when MLAstro closes the wireless session
+- Toast wording uses `FORCE-STOP` instead of `E-STOP` (protocol `ESTOP:1` / `forceStop` unchanged)
 
 ## 2.1.0.0
 
