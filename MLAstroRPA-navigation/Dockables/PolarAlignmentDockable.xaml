@@ -573,7 +573,15 @@
                         </WrapPanel>
                         <StackPanel Grid.Column="2" Grid.RowSpan="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,20,0">
                             <TextBlock Text="Left" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                            <CheckBox IsChecked="{Binding AzErrorRight, Mode=TwoWay}" Style="{StaticResource DirectionToggleStyle}" VerticalAlignment="Center" GotKeyboardFocus="OnAlignmentInputGotFocus"/>
+                            <!-- Direction toggle = a switch that sends AzDi/AlDi to the firmware the moment it is
+                                 flipped, so it must be locked exactly like the Align buttons while an external
+                                 controller (TPPA) owns the hardware: CanModify = not automated AND not
+                                 external-locked. Telemetry keeps syncing IsChecked either way. -->
+                            <CheckBox IsChecked="{Binding AzErrorRight, Mode=TwoWay}"
+                                      Style="{StaticResource DirectionToggleStyle}"
+                                      IsEnabled="{Binding CanModify}"
+                                      VerticalAlignment="Center"
+                                      GotKeyboardFocus="OnAlignmentInputGotFocus"/>
                             <TextBlock Text="Right" VerticalAlignment="Center" Margin="8,0,0,0"/>
                         </StackPanel>
                         <Button Grid.Column="3" Grid.RowSpan="2" Content="Align Az" Width="100" VerticalAlignment="Center" Command="{Binding AlignAzCommand}" IsEnabled="{Binding CanAlign}"/>
@@ -600,8 +608,11 @@
                         </WrapPanel>
                         <StackPanel Grid.Column="2" HorizontalAlignment="Center" Margin="0,0,20,0">
                             <TextBlock Text="Up" HorizontalAlignment="Center" Margin="0,0,0,5"/>
+                            <!-- Same lock as the Az toggle: this switch also pushes AlDi down to the firmware
+                                 immediately, so it is disabled while TPPA (external control) owns the hardware. -->
                             <CheckBox IsChecked="{Binding AltErrorUp, Mode=TwoWay}"
                                       Style="{StaticResource DirectionToggleStyle}"
+                                      IsEnabled="{Binding CanModify}"
                                       HorizontalAlignment="Center"
                                       GotKeyboardFocus="OnAlignmentInputGotFocus">
                                 <CheckBox.LayoutTransform>
