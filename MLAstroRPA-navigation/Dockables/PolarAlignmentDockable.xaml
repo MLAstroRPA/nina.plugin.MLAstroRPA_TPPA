@@ -563,12 +563,15 @@
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
                         <TextBlock Grid.Column="0" Grid.Row="0" Text="Az Error:" FontWeight="SemiBold" Margin="0,0,15,5"/>
+                        <!-- The DMS boxes also talk to the hardware (Enter sends AzED/AzEM/AzES + AzDi), so they are
+                             locked with the same CanModify gate as the direction toggles / Align buttons: TPPA keeps
+                             writing these values itself while it owns the hardware. Telemetry still updates them. -->
                         <WrapPanel Grid.Column="1" Grid.Row="0" Margin="0,0,20,5">
-                            <TextBox Text="{Binding AzErrorDeg, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Tag="az" Width="60" Margin="0,0,5,0" GotKeyboardFocus="OnAlignmentInputGotFocus" KeyDown="OnAlignmentInputKeyDown"/>
+                            <TextBox Text="{Binding AzErrorDeg, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Tag="az" Width="60" Margin="0,0,5,0" IsEnabled="{Binding CanModify}" GotKeyboardFocus="OnAlignmentInputGotFocus" KeyDown="OnAlignmentInputKeyDown"/>
                             <TextBlock Text="°" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                            <TextBox Text="{Binding AzErrorMin, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Tag="az" Width="60" Margin="0,0,5,0" GotKeyboardFocus="OnAlignmentInputGotFocus" KeyDown="OnAlignmentInputKeyDown"/>
+                            <TextBox Text="{Binding AzErrorMin, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Tag="az" Width="60" Margin="0,0,5,0" IsEnabled="{Binding CanModify}" GotKeyboardFocus="OnAlignmentInputGotFocus" KeyDown="OnAlignmentInputKeyDown"/>
                             <TextBlock Text="'" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                            <TextBox Text="{Binding AzErrorSec, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Tag="az" Width="60" Margin="0,0,5,0" GotKeyboardFocus="OnAlignmentInputGotFocus" KeyDown="OnAlignmentInputKeyDown"/>
+                            <TextBox Text="{Binding AzErrorSec, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Tag="az" Width="60" Margin="0,0,5,0" IsEnabled="{Binding CanModify}" GotKeyboardFocus="OnAlignmentInputGotFocus" KeyDown="OnAlignmentInputKeyDown"/>
                             <TextBlock Text='"' VerticalAlignment="Center"/>
                         </WrapPanel>
                         <StackPanel Grid.Column="2" Grid.RowSpan="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,20,0">
@@ -598,12 +601,13 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Text="Alt Error:" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,15,0"/>
+                        <!-- Same lock as the Az row: disabled while TPPA (external control) owns the hardware. -->
                         <WrapPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,20,0">
-                            <TextBox Text="{Binding AltErrorDeg, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Tag="alt" Width="60" Margin="0,0,5,0" GotKeyboardFocus="OnAlignmentInputGotFocus" KeyDown="OnAlignmentInputKeyDown"/>
+                            <TextBox Text="{Binding AltErrorDeg, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Tag="alt" Width="60" Margin="0,0,5,0" IsEnabled="{Binding CanModify}" GotKeyboardFocus="OnAlignmentInputGotFocus" KeyDown="OnAlignmentInputKeyDown"/>
                             <TextBlock Text="°" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                            <TextBox Text="{Binding AltErrorMin, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Tag="alt" Width="60" Margin="0,0,5,0" GotKeyboardFocus="OnAlignmentInputGotFocus" KeyDown="OnAlignmentInputKeyDown"/>
+                            <TextBox Text="{Binding AltErrorMin, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Tag="alt" Width="60" Margin="0,0,5,0" IsEnabled="{Binding CanModify}" GotKeyboardFocus="OnAlignmentInputGotFocus" KeyDown="OnAlignmentInputKeyDown"/>
                             <TextBlock Text="'" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                            <TextBox Text="{Binding AltErrorSec, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Tag="alt" Width="60" Margin="0,0,5,0" GotKeyboardFocus="OnAlignmentInputGotFocus" KeyDown="OnAlignmentInputKeyDown"/>
+                            <TextBox Text="{Binding AltErrorSec, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Tag="alt" Width="60" Margin="0,0,5,0" IsEnabled="{Binding CanModify}" GotKeyboardFocus="OnAlignmentInputGotFocus" KeyDown="OnAlignmentInputKeyDown"/>
                             <TextBlock Text='"' VerticalAlignment="Center"/>
                         </WrapPanel>
                         <StackPanel Grid.Column="2" HorizontalAlignment="Center" Margin="0,0,20,0">
