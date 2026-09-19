@@ -14,6 +14,8 @@
 ### MLAstroRPA — HeaderBar: AP/STA link status
 - Dock header shows a `AP: connected <IP>` / `AP: ready <IP>` / `AP: error` row (replacing the old `Connection:` label, plain lowercase text like the `STA:` row) and a `STA: 📶/📶!/📶x <IP>` row; both rows and the firmware version are hidden while the device is not connected, and the data comes from firmware ≥ 1.7.0 (`link`, `ap_ready`, `ap_ip`, `sta_qual`, `sta_ip` / tokens `APrd`, `WQu`)
 
+### MLAstroRPA — Save All & Reboot (Serial): wait for the device's `All Setting Saved` marker before resetting the ESP32
+
 ## 2.1.1.0
 
 ### MLAstroRPA — Wireless connect
