@@ -1284,6 +1284,14 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
                 return;
             }
 
+            // Bucket 1c: marker "All Setting Saved" — firmware xác nhận ĐÃ ghi FRAM xong (Save&Reboot:1).
+            // Đây là tín hiệu DUY NHẤT để plugin biết đã lưu thành công và được phép reset ESP qua EN pin.
+            if (line.IndexOf(AllSettingsSavedMarker, StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                LogReceivedLine(line);
+                _allSettingsSavedTcs?.TrySetResult(true);
+            }
+
             // Bucket 2: Answer to a pending command
             if (line.StartsWith("ok", StringComparison.OrdinalIgnoreCase))
             {
@@ -1472,6 +1480,33 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
             }
 
             return await SendAndAwaitOkAsync(text).ConfigureAwait(false);
+        }
+
+        /// <summary>Marker firmware in ra NGAY SAU khi ghi FRAM xong (lệnh <c>Save&amp;Reboot:1</c>).</summary>
+        private const string AllSettingsSavedMarker = "All Setting Saved";
+        private TaskCompletionSource<bool>? _allSettingsSavedTcs;
+
+        /// <summary>
+        /// Tạo sẵn chỗ chờ marker "All Setting Saved" — PHẢI gọi TRƯỚC khi gửi lệnh Save&amp;Reboot, vì
+        /// firmware in marker ngay khi ghi FRAM xong (có thể tới trước khi ta bắt đầu chờ).
+        /// </summary>
+        public void ArmAllSettingsSavedWaiter()
+        {
+            _allSettingsSavedTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        }
+
+        /// <summary>
+        /// Chờ marker "All Setting Saved" trong <paramref name="timeoutMs"/>. Chỉ khi trả về <c>true</c>
+        /// mới được coi là ĐÃ LƯU THÀNH CÔNG vào FRAM (và mới được phép reset ESP qua EN pin).
+        /// </summary>
+        public async Task<bool> WaitForAllSettingsSavedAsync(int timeoutMs = 6000)
+        {
+            var tcs = _allSettingsSavedTcs
+                      ?? new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            _allSettingsSavedTcs = tcs;
+
+            var completed = await Task.WhenAny(tcs.Task, Task.Delay(timeoutMs)).ConfigureAwait(false);
+            return completed == tcs.Task && tcs.Task.Result;
         }
 
         private async Task StartHandshakeAndConnectionChecksAsync()

@@ -931,6 +931,10 @@ namespace MLAstro_Robotic_Polar_Alignment.Plugin
                 // Password updates are sent separately above; send the remaining configuration last.
                 var configCommand = _serialConnectionService.BuildConfigurationCommand(Settings);
 
+                // Chuẩn bị chờ marker TRƯỚC khi gửi: firmware in "All Setting Saved" ngay sau khi ghi
+                // FRAM xong, nếu arm sau khi gửi thì có thể lỡ marker.
+                _serialConnectionService.ArmAllSettingsSavedWaiter();
+
                 // Send to device
                 var sent = _serialConnectionService.Send(configCommand);
                 if (!sent)
@@ -939,8 +943,18 @@ namespace MLAstro_Robotic_Polar_Alignment.Plugin
                     return;
                 }
 
-                // Wait for device to process and reboot
-                await System.Threading.Tasks.Task.Delay(1000);
+                // CHỈ coi là lưu thành công khi nhận được marker "All Setting Saved" từ thiết bị.
+                var saved = await _serialConnectionService.WaitForAllSettingsSavedAsync(6000);
+                if (!saved)
+                {
+                    Logger.Error("[MLAstro] Save NOT confirmed: no 'All Setting Saved' marker from the device within 6s - ESP32 is NOT reset (settings may be unsaved).");
+                    return;
+                }
+
+                Logger.Info("[MLAstro] FRAM save confirmed ('All Setting Saved'). Resetting ESP32 via DTR/RTS...");
+
+                // Firmware KHÔNG tự reboot (xem Serial-protocol.md) — PC phải reset ESP qua EN pin.
+                _serialConnectionService.ResetEsp32();
 
                 // Disconnect
                 _serialConnectionService.Disconnect();
