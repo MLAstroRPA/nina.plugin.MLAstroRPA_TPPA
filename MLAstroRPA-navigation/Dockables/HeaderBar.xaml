@@ -104,10 +104,12 @@
                                FontSize="11" 
                                Foreground="#BDC3C7"
                                Margin="0,2,0,0"/>
+                    <!-- Firmware version: chỉ hiện khi đã kết nối + handshake OK (chưa kết nối thì ẩn) -->
                     <TextBlock Text="{Binding FirmwareVersion, StringFormat=Firmware {0}}" 
                                FontSize="11" 
                                Foreground="#BDC3C7"
-                               Margin="0,2,0,0"/>
+                               Margin="0,2,0,0"
+                               Visibility="{Binding ControlsVisibility}"/>
                 </StackPanel>
             </StackPanel>
 
@@ -123,15 +125,37 @@
                                Foreground="{Binding StatusForeground}"
                                VerticalAlignment="Center"/>
                 </StackPanel>
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="Connection:" 
-                               Foreground="#BDC3C7" 
+                <!-- Trạng thái AP của thiết bị (THAY nhãn "Connection:" cũ) — CHỈ hiện khi đã kết nối +
+                     handshake OK; chưa kết nối thì ẩn hẳn cả dòng (không còn trạng thái "AP: -"):
+                     · "AP: Connected <IP>" = CHÍNH PC đang đi qua hotspot của ESP32 (firmware báo link=AP)
+                     · "AP: Ready <IP>"     = AP đã lên nhưng PC đi đường khác (STA / cáp USB)
+                     · "AP: Error"          = AP không lên / không có IP
+                     ToolTip = trạng thái link tới thiết bị (cổng COM / kết nối wireless). -->
+                <TextBlock Text="{Binding ApStatusText}"
+                           FontSize="11"
+                           Foreground="#BDC3C7"
+                           ToolTip="{Binding ConnectionStatusText}"
+                           Visibility="{Binding ControlsVisibility}"/>
+
+                <!-- STA: <icon> IP — icon dạng ký tự: 📶x = chưa vào router · 📶! = có router nhưng
+                     không internet · 📶 = có internet. IP là địa chỉ router cấp cho thiết bị.
+                     Chỉ hiện khi đã kết nối + handshake OK (cùng điều kiện với dòng AP). -->
+                <StackPanel Orientation="Horizontal" Margin="0,3,0,0"
+                            Visibility="{Binding ControlsVisibility}">
+                    <TextBlock Text="STA:"
+                               Foreground="#BDC3C7"
                                Margin="0,0,5,0"
                                VerticalAlignment="Center"/>
-                    <Ellipse Width="12" 
-                             Height="12" 
-                             Fill="{Binding ConnectionStatusColor}"
-                             ToolTip="{Binding ConnectionStatusText}"/>
+                    <!-- Icon + IP dùng CÙNG màu với nhãn "STA:" (không tô màu theo mức chất lượng) -->
+                    <TextBlock Text="{Binding StaIconText}"
+                               FontSize="12"
+                               Foreground="#BDC3C7"
+                               Margin="0,0,5,0"
+                               VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding StaStatusText}"
+                               FontSize="11"
+                               Foreground="#BDC3C7"
+                               VerticalAlignment="Center"/>
                 </StackPanel>
             </StackPanel>
 

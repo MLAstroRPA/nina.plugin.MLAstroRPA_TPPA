@@ -154,6 +154,56 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
             }
         }
 
+        // ==================================================================
+        // ĐƯỜNG VÀO + CHẤT LƯỢNG STA (firmware báo)
+        //   LinkPath   : "AP" = PC đang join hotspot của thiết bị; "STA" = đi qua router.
+        //                Firmware tính theo remoteIP của TỪNG client ở frame handshakeResult.
+        //   StaQuality : 0 = chưa vào router, 1 = có router nhưng không internet, 2 = có internet
+        //                (field `sta_qual`, dò bằng TCP probe trong firmware).
+        //   StaIp      : IP LAN mà router cấp cho ESP32 (field `sta_ip`).
+        // ==================================================================
+        private string _linkPath = string.Empty;
+        public string LinkPath
+        {
+            // Đọc qua IsConnected: rớt kết nối là tự rỗng, không cần reset ở mọi nhánh thoát.
+            get => IsConnected ? _linkPath : string.Empty;
+            private set
+            {
+                if (_linkPath == value) return;
+                _linkPath = value;
+                OnPropertyChanged();
+            }
+        }
+
+        private int _staQuality;
+        public int StaQuality
+        {
+            get => _staQuality;
+            private set
+            {
+                if (_staQuality == value) return;
+                _staQuality = value;
+                OnPropertyChanged();
+            }
+        }
+
+        // AP của THIẾT BỊ (hotspot ESP32 phát ra): đã lên và có IP chưa + IP hiện tại.
+        // Dùng cho dòng "AP: Connected/Ready/Error <IP>" trên HeaderBar.
+        private bool _apReady;
+        public bool ApReady
+        {
+            get => _apReady;
+            private set
+            {
+                if (_apReady == value) return;
+                _apReady = value;
+                OnPropertyChanged();
+            }
+        }
+
+        // IP AP mới nhất firmware báo (field `ap_ip`); rỗng = chưa có.
+        private string _apIp = string.Empty;
+
         public string ConfiguredAddress => string.IsNullOrWhiteSpace(_settings.MlaHost) ? "MLAstroRPA.local" : _settings.MlaHost;
 
         private bool _externalControlActive;
@@ -583,6 +633,11 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
                         {
                             _serial.SetWirelessFirmwareVersion(fwVer);
                         }
+                        // Đường vào (AP/STA) — firmware tính theo remoteIP của chính client này.
+                        if (ok && TryGetString(root, "link", out var linkPath))
+                        {
+                            LinkPath = linkPath;
+                        }
                         _handshakeTcs?.TrySetResult(ok);
                         return;
                     }
@@ -846,6 +901,33 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
             AddToken(tokens, "Scal", "1");
             AddToken(tokens, "SLvl", _speedLevelFromSnapshot.ToString(CultureInfo.InvariantCulture));
             AddToken(tokens, "WSta", TryGetDouble(root, "rssi", out var rssi) && rssi > -1000 ? "1" : "0");
+
+            // Chất lượng đường STA + IP LAN của thiết bị (firmware ≥ 1.7.0). Đẩy tiếp thành token
+            // WQu / STAi để dock dùng CHUNG một đường parse với khi cắm cáp Serial.
+            // Firmware cũ (< 1.7.0) không gửi `sta_qual` → suy ra mức tối thiểu từ RSSI (đang vào
+            // router ⇒ 1) để dòng STA không hiện sai thành "none".
+            StaQuality = TryGetInt(root, "sta_qual", out var staQual)
+                ? staQual
+                : (rssi > -1000 ? 1 : 0);
+            if (TryGetString(root, "sta_ip", out var staIp) && !string.IsNullOrWhiteSpace(staIp))
+            {
+                // Ghi vào snapshot scalar "ip" ⇒ AppendSnapshotTokens phát token STAi với IP MỚI NHẤT
+                // (IP trong snapshot có thể cũ nếu DHCP cấp địa chỉ khác mà cấu hình không đổi).
+                _snapshotScalars["ip"] = staIp;
+            }
+            AddToken(tokens, "WQu", StaQuality.ToString(CultureInfo.InvariantCulture));
+
+            // AP của thiết bị: đã lên/có IP chưa (token APrd) + IP AP (token APip, xem
+            // AppendSnapshotTokens — IP live được ưu tiên hơn giá trị trong snapshot cấu hình).
+            if (TryGetBool(root, "ap_ready", out var apReady))
+            {
+                ApReady = apReady;
+            }
+            if (TryGetString(root, "ap_ip", out var apIp) && !string.IsNullOrWhiteSpace(apIp))
+            {
+                _apIp = apIp;
+            }
+            AddToken(tokens, "APrd", ApReady ? "1" : "0");
             AddToken(tokens, "Home", TryGetBool(root, "homed", out var homed) && homed ? "1" : "0");
 
             if (TryGetDouble(root, "pos_az", out var posAz))
@@ -919,7 +1001,9 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
             {
                 AddToken(tokens, "APss", Get(ap, "ssid"));
                 AddToken(tokens, "APma", Get(ap, "mac"));
-                AddToken(tokens, "APip", Get(ap, "ip"));
+                // IP AP: ưu tiên `ap_ip` LIVE (firmware ≥ 1.7.0); snapshot chỉ là cấu hình đã lưu nên
+                // có thể khác thực tế khi AP lên bằng giá trị fallback.
+                AddToken(tokens, "APip", string.IsNullOrWhiteSpace(_apIp) ? Get(ap, "ip") : _apIp);
                 AddToken(tokens, "APsu", Get(ap, "subnet"));
             }
 

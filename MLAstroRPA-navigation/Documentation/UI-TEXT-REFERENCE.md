@@ -17,9 +17,10 @@ Tài liệu liệt kê toàn bộ text hiển thị trên trang **Options** củ
 |---|---|---|
 | `MLAstro RPA` | tĩnh | FontSize 18, đậm |
 | `Robotic Polar Alignment` | tĩnh | phụ đề |
-| `Firmware {0}` | binding `FirmwareVersion` | vd `Firmware 1.2.71` |
+| `Firmware {0}` | binding `FirmwareVersion` | vd `Firmware 1.2.71`. CHỈ hiện khi đã kết nối + handshake OK (`ControlsVisibility`); chưa kết nối thì ẩn |
 | `Status:` | tĩnh | + giá trị động `SystemStatus` (màu theo `StatusForeground`) |
-| `Connection:` | tĩnh | kèm chấm tròn màu theo `ConnectionStatusColor` |
+| `ApStatusText` (`AP: connected <IP>` / `AP: ready <IP>` / `AP: error`) | động | dòng AP của thiết bị (THAY nhãn `Connection:` cũ) — chữ thường, KHÔNG in đậm, cùng font/màu xám `#BDC3C7` với dòng `STA:`; ToolTip = `ConnectionStatusText` (cổng COM / kết nối wireless). **connected** = chính PC đang đi qua hotspot (firmware báo `link`=AP); **ready** = AP đã lên nhưng PC đi đường khác (STA/cáp USB); **error** = AP không lên (`ap_ready`=0). Ẩn hẳn khi chưa kết nối (`ControlsVisibility`) |
+| `STA: <icon> <IP>` | động | dòng chất lượng đường STA: `📶x` = chưa vào router (`sta_qual`=0) · `📶!` = có router nhưng không internet (=1) · `📶` = có internet (=2); IP = `sta_ip`. Ẩn khi chưa kết nối |
 | `FORCE`⏎`STOP` | tĩnh | nút đỏ, luôn hiện |
 | `RESET`⏎`ERROR` | tĩnh | chỉ hiện khi `ResetErrorButtonVisibility` = STATUS ERROR |
 
@@ -120,7 +121,7 @@ Tài liệu liệt kê toàn bộ text hiển thị trên trang **Options** củ
 | T7 | Nhãn `Enable overshoot` **và** CheckBox | TPPA OPTION → group MLAstro | When enabled, the Alt axis corrects the full 100% of the error and then moves a fixed overshoot amount past the target for the selected direction(s). | `MLAstroRPAOvershootEnabledToolTip` |
 | T8 | Nhãn `Run overshoot for moving Up` **và** CheckBox | TPPA OPTION → group MLAstro | When the Alt axis must correct upwards (as shown on screen), move the full 100% of the error plus the configured overshoot amount past the target. Range: 0–240 arcminutes (0 = correct the full error with no overshoot). | `MLAstroRPAOvershootUpToolTip` |
 | T9 | Nhãn `Run overshoot for moving Down` **và** CheckBox | TPPA OPTION → group MLAstro | When the Alt axis must correct downwards (as shown on screen), move the full 100% of the error plus the configured overshoot amount past the target. Range: 0–240 arcminutes (0 = correct the full error with no overshoot). | `MLAstroRPAOvershootDownToolTip` |
-| T10 | Chấm tròn cạnh chữ `Connection:` | Header (mọi tab) | `ConnectionStatusText` (động — theo trạng thái kết nối) | binding |
+| T10 | ToolTip trên dòng `AP: ...` | Header (mọi tab) | `ConnectionStatusText` (động — theo trạng thái kết nối) | binding |
 | T11 | Nút `FORCE STOP` | Header | FORCE STOP (Emergency) | inline |
 | T12 | Nút `RESET ERROR` | Header (khi ERROR) | RESET ERROR - clears driver error (sends ReEr:1) | inline |
 | T13 | Nút `🗑 CLEAR` | CONTROL → Alarm History | Xoá toàn bộ lịch sử Alarm | inline |

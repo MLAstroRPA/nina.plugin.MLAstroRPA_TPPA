@@ -405,6 +405,17 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
 
         public bool IsConnected => _serialPort?.IsOpen == true || WirelessActive;
 
+        /// <summary>
+        /// Đường đang dùng để nói chuyện với thiết bị (dùng cho HeaderBar):
+        ///   "AP"  = wireless, firmware báo phiên WS này vào qua hotspot của ESP32;
+        ///   "STA" = wireless, đi qua router mà ESP32 đã join;
+        ///   "COM" = cáp USB/Serial.
+        /// Rỗng khi chưa kết nối.
+        /// </summary>
+        public string LinkPath => WirelessActive
+            ? _wirelessProxy!.LinkPath
+            : (_serialPort?.IsOpen == true ? "COM" : string.Empty);
+
         // ==================================================================
         // FACADE cho transport WIRELESS (WebSocket)
         // Khi có proxy đang kết nối, service này đóng vai "cổng vào duy nhất" cho UI/dock/controller:
@@ -450,6 +461,7 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
             OnPropertyChanged(nameof(ConnectionStatus));
             OnPropertyChanged(nameof(HandshakeStatus));
             OnPropertyChanged(nameof(FirmwareVersion));
+            OnPropertyChanged(nameof(LinkPath));
             InvokeOnUiThread(() => RaiseExternalState(IsConnected));
         }
 
@@ -2265,6 +2277,13 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
                             if (int.TryParse(value, out var wifiStatus))
                                 data.WifiConnected = wifiStatus == 1;
                             break;
+                        // Chất lượng đường STA: 0 = chưa vào router, 1 = có router nhưng không internet,
+                        // 2 = có internet (firmware dò bằng TCP probe; token WQu do firmware serial phát
+                        // hoặc do MlastroWebSocketService chuyển từ field `sta_qual`).
+                        case "WQu":
+                            if (int.TryParse(value, out var staQuality))
+                                data.StaQuality = staQuality;
+                            break;
 
                         // Relative Mode
                         case "JoRe":
@@ -2307,6 +2326,15 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
                         // WiFi Info
                         case "STAi":
                             data.StationIP = value;
+                            break;
+
+                        // AP của thiết bị (hotspot): IP + "đã lên hay chưa" — dùng cho dòng
+                        // "AP: Connected/Ready/Error <IP>" trên HeaderBar.
+                        case "APip":
+                            data.ApIp = value;
+                            break;
+                        case "APrd":
+                            data.ApReady = value == "1";
                             break;
 
                         // Home status (Read-Only from hardware)
@@ -2369,6 +2397,8 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
         // System
         public int SpeedLevel { get; set; } = 3;
         public bool WifiConnected { get; set; }
+        /// <summary>Chất lượng đường STA: 0 = chưa vào router, 1 = có router nhưng không internet, 2 = có internet.</summary>
+        public int StaQuality { get; set; }
         public bool IsHomed { get; set; }
 
         // Mode
@@ -2405,6 +2435,10 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
 
         // Network
         public string StationIP { get; set; } = null!;
+        /// <summary>IP hotspot (AP) của thiết bị (token APip).</summary>
+        public string ApIp { get; set; } = null!;
+        /// <summary>AP của thiết bị đã lên và có IP chưa (token APrd: 1 = có).</summary>
+        public bool ApReady { get; set; }
     }
 
     public class TelemetryDataEventArgs : EventArgs

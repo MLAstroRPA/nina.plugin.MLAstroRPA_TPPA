@@ -9,6 +9,11 @@
 > with MPL-2.0: retain the license and notices, credit the original author, and make the source
 > (including your modifications) available.
 
+## 2.2.0.0
+
+### MLAstroRPA — HeaderBar: AP/STA link status
+- Dock header shows a `AP: connected <IP>` / `AP: ready <IP>` / `AP: error` row (replacing the old `Connection:` label, plain lowercase text like the `STA:` row) and a `STA: 📶/📶!/📶x <IP>` row; both rows and the firmware version are hidden while the device is not connected, and the data comes from firmware ≥ 1.7.0 (`link`, `ap_ready`, `ap_ip`, `sta_qual`, `sta_ip` / tokens `APrd`, `WQu`)
+
 ## 2.1.1.0
 
 ### MLAstroRPA — Wireless connect

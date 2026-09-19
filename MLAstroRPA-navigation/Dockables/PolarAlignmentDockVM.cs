@@ -59,6 +59,20 @@ namespace MLAstro_Robotic_Polar_Alignment.Dockables
         private string _connectionStatusText = "Disconnected";
         private Visibility _controlsVisibility = Visibility.Collapsed;
 
+        // HeaderBar — dòng AP (Connected/Ready/Error) + dòng STA (icon + IP LAN của thiết bị)
+        // (cả hai dòng dùng CÙNG màu xám như nhãn — KHÔNG tô màu theo trạng thái)
+        private string _apStatusText = "AP: -";
+        private bool _apReady;
+        private string _apIp = string.Empty;
+        // Icon dòng STA (dùng ký tự cho gọn): 📶 = có internet · 📶! = có router nhưng không internet ·
+        // 📶x = chưa vào router. Viết bằng escape để không phụ thuộc encoding của file.
+        private const string StaIconInternet = "\U0001F4F6";
+        private const string StaIconNoInternet = "\U0001F4F6!";
+        private const string StaIconNone = "\U0001F4F6x";
+
+        private string _staStatusText = "none";
+        private string _staIconText = StaIconNone;
+
         // Manual Movement Properties
         private int _currentSpeed = 3;
         private bool _isRelativeMode = false;
@@ -218,6 +232,37 @@ namespace MLAstro_Robotic_Polar_Alignment.Dockables
         {
             get => _controlsVisibility;
             private set => SetProperty(ref _controlsVisibility, value);
+        }
+
+        /// <summary>
+        /// Dòng "AP: ..." ở HeaderBar (thay chỗ nhãn "Connection:" cũ) — chữ thường, cùng font với dòng STA:
+        ///   "AP: connected <IP>" = CHÍNH PC đang đi qua hotspot của ESP32 (firmware báo link=AP);
+        ///   "AP: ready <IP>"     = AP đã lên và có IP nhưng PC đi đường khác (STA/cáp USB);
+        ///   "AP: error"          = AP không lên / không có IP;
+        ///   "AP: -"              = chưa nối được với thiết bị nên chưa biết trạng thái AP.
+        /// </summary>
+        public string ApStatusText
+        {
+            get => _apStatusText;
+            private set => SetProperty(ref _apStatusText, value);
+        }
+
+        /// <summary>
+        /// Dòng "STA: &lt;icon&gt; IP": text là IP LAN mà router cấp cho ESP32.
+        /// Icon mạng (3 Path trong HeaderBar) đổi theo StaIcon*Visibility:
+        /// gạch chéo = chưa vào router, có dấu ! = có router nhưng không internet, bình thường = có internet.
+        /// </summary>
+        public string StaStatusText
+        {
+            get => _staStatusText;
+            private set => SetProperty(ref _staStatusText, value);
+        }
+
+        /// <summary>Icon dòng STA: 📶 (có internet) / 📶! (có router, không internet) / 📶x (chưa vào router).</summary>
+        public string StaIconText
+        {
+            get => _staIconText;
+            private set => SetProperty(ref _staIconText, value);
         }
 
         #endregion
@@ -830,6 +875,7 @@ namespace MLAstro_Robotic_Polar_Alignment.Dockables
             _serialService.AddExternalControlListener(active => IsExternalLocked = active);
 
             FirmwareVersion = _serialService.FirmwareVersion;
+            UpdateApStatus();   // dòng "AP: Connected/Ready/Error" theo trạng thái hiện tại
 
             Logger.Info($"[MLAstro] ViewModel subscribed to SerialConnectionService singleton (instance: {_serialService.GetHashCode()})");
         }
@@ -944,11 +990,13 @@ namespace MLAstro_Robotic_Polar_Alignment.Dockables
             // For now, keep placeholder values
             // AzOutSpeed, AltOutSpeed, AzMotorSpeed, AltMotorSpeed remain as initialized
 
-            // Update WiFi indicator in firmware version (optional)
-            if (!string.IsNullOrWhiteSpace(e.Data.StationIP))
-            {
-                // Could show WiFi status in header if needed
-            }
+            // Dòng "STA: <icon> IP" ở HeaderBar (token WQu + STAi của firmware)
+            UpdateStaStatus(e.Data.StaQuality, e.Data.StationIP);
+
+            // Dòng "AP: Connected/Ready/Error <IP>" ở HeaderBar (token APrd + APip của firmware)
+            _apReady = e.Data.ApReady;
+            _apIp = e.Data.ApIp ?? string.Empty;
+            UpdateApStatus();
         }
 
         private void OnCompletionReceived(object? sender, string completionType)
@@ -1109,10 +1157,15 @@ namespace MLAstro_Robotic_Polar_Alignment.Dockables
             if (e.PropertyName == nameof(SerialConnectionService.IsConnected))
             {
                 UpdateConnectionStatus();
+                UpdateApStatus(); // đổi transport (COM ⇄ wireless) là đổi đường vào
             }
             else if (e.PropertyName == nameof(SerialConnectionService.HandshakeStatus))
             {
                 UpdateConnectionStatus();
+            }
+            else if (e.PropertyName == nameof(SerialConnectionService.LinkPath))
+            {
+                UpdateApStatus();
             }
             else if (e.PropertyName == nameof(SerialConnectionService.FirmwareVersion))
             {
@@ -1154,6 +1207,63 @@ namespace MLAstro_Robotic_Polar_Alignment.Dockables
                 SystemStatus = "DISCONNECTED";
                 StatusForeground = Brushes.Gray;
                 ControlsVisibility = Visibility.Collapsed;
+            }
+        }
+
+        /// <summary>
+        /// Dòng "AP: ..." trên HeaderBar. Trạng thái AP của THIẾT BỊ lấy từ telemetry (token APrd/APip);
+        /// việc PC có đang đi QUA đường AP hay không lấy từ `link` mà firmware báo ở handshakeResult.
+        /// </summary>
+        private void UpdateApStatus()
+        {
+            // Chưa nói chuyện được với thiết bị thì chưa biết AP thế nào.
+            if (!_serialService.IsConnected)
+            {
+                ApStatusText = "AP: -";
+                return;
+            }
+
+            if (!_apReady)
+            {
+                ApStatusText = "AP: error";
+                return;
+            }
+
+            var ip = string.IsNullOrWhiteSpace(_apIp) ? string.Empty : " " + _apIp.Trim();
+            if (string.Equals(_serialService.LinkPath, "AP", StringComparison.OrdinalIgnoreCase))
+            {
+                ApStatusText = "AP: connected" + ip;
+            }
+            else
+            {
+                ApStatusText = "AP: ready" + ip;
+            }
+        }
+
+        /// <summary>
+        /// Dòng "STA: &lt;icon&gt; IP" trên HeaderBar, lấy từ telemetry (token WQu + STAi):
+        ///   0 = chưa vào router       → icon gạch chéo, text "none"
+        ///   1 = có router, không net  → icon + "!", text là IP LAN của thiết bị
+        ///   2 = có internet           → icon thường, text là IP LAN của thiết bị
+        /// </summary>
+        private void UpdateStaStatus(int staQuality, string? staIp)
+        {
+            var ip = string.IsNullOrWhiteSpace(staIp) ? string.Empty : staIp.Trim();
+
+            switch (staQuality)
+            {
+                case 1:
+                    StaIconText = StaIconNoInternet;
+                    StaStatusText = ip.Length > 0 ? ip : "router only";
+                    break;
+                case 2:
+                    StaIconText = StaIconInternet;
+                    StaStatusText = ip.Length > 0 ? ip : "connected";
+                    break;
+                default:
+                    StaIconText = StaIconNone;
+                    StaStatusText = "none";
+                    break;
             }
         }
 
