@@ -9,6 +9,11 @@
 > with MPL-2.0: retain the license and notices, credit the original author, and make the source
 > (including your modifications) available.
 
+## 2.2.1.0 — 2026-09-20
+
+### Fixed — AP/STA connection status indicators
+### Fixed — WebSocket link watchdog disconnect handling
+
 ## 2.2.0.0
 
 ### MLAstroRPA — HeaderBar: AP/STA link status
