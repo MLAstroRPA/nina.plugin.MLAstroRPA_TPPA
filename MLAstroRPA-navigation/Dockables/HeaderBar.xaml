@@ -125,20 +125,35 @@
                                Foreground="{Binding StatusForeground}"
                                VerticalAlignment="Center"/>
                 </StackPanel>
-                <!-- Trạng thái AP của thiết bị (THAY nhãn "Connection:" cũ) — CHỈ hiện khi đã kết nối +
-                     handshake OK; chưa kết nối thì ẩn hẳn cả dòng (không còn trạng thái "AP: -"):
-                     · "AP: Connected <IP>" = CHÍNH PC đang đi qua hotspot của ESP32 (firmware báo link=AP)
-                     · "AP: Ready <IP>"     = AP đã lên nhưng PC đi đường khác (STA / cáp USB)
-                     · "AP: Error"          = AP không lên / không có IP
+                <!-- Trạng thái AP của thiết bị — CHỈ hiện khi đã kết nối + handshake OK:
+                     · "AP: 🟢 <IP>" = CHÍNH PC đang đi qua hotspot của ESP32 (firmware báo link=AP)
+                     · "AP: 🛜 <IP>" = AP đã lên nhưng PC đi đường khác (STA / cáp USB)
+                     · "AP: ❌"      = AP không lên / không có IP
                      ToolTip = trạng thái link tới thiết bị (cổng COM / kết nối wireless). -->
-                <TextBlock Text="{Binding ApStatusText}"
-                           FontSize="11"
-                           Foreground="#BDC3C7"
-                           ToolTip="{Binding ConnectionStatusText}"
-                           Visibility="{Binding ControlsVisibility}"/>
+                <StackPanel Orientation="Horizontal" Margin="0,2,0,0"
+                            ToolTip="{Binding ConnectionStatusText}"
+                            Visibility="{Binding ControlsVisibility}">
+                    <TextBlock Text="AP  :"
+                               FontSize="11"
+                               Foreground="#BDC3C7"
+                               Margin="0,0,5,0"
+                               VerticalAlignment="Center"/>
+                    <!-- Icon AP: tô màu bằng Foreground (WPF KHÔNG vẽ được emoji màu) — wifi xanh dương
+                         (PC đi qua hotspot) · ● xanh lá (AP đã lên, PC đi đường khác) · ✕ đỏ (AP lỗi). -->
+                    <TextBlock Text="{Binding ApIconGlyph}"
+                               FontSize="12" 
+                               Foreground="{Binding ApIconBrush}"
+                               Margin="0,0,4,0"
+                               VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding ApStatusText}"
+                               FontSize="11"
+                               Foreground="#BDC3C7"
+                               VerticalAlignment="Center"/>
+                </StackPanel>
 
-                <!-- STA: <icon> IP — icon dạng ký tự: 📶x = chưa vào router · 📶! = có router nhưng
-                     không internet · 📶 = có internet. IP là địa chỉ router cấp cho thiết bị.
+                <!-- STA: <thanh sóng><dấu> IP — thanh sóng "▂▄▆" tô màu theo chất lượng đường STA
+                     (xanh = có internet · vàng cam = có router nhưng không internet · đỏ = chưa vào
+                     router), dấu "!" / "X" luôn màu đỏ (WPF không vẽ được emoji màu).
                      Chỉ hiện khi đã kết nối + handshake OK (cùng điều kiện với dòng AP). -->
                 <StackPanel Orientation="Horizontal" Margin="0,3,0,0"
                             Visibility="{Binding ControlsVisibility}">
@@ -146,10 +161,10 @@
                                Foreground="#BDC3C7"
                                Margin="0,0,5,0"
                                VerticalAlignment="Center"/>
-                    <!-- Icon + IP dùng CÙNG màu với nhãn "STA:" (không tô màu theo mức chất lượng) -->
+                    <!-- Icon chất lượng đường STA (emoji màu): 📶 / 📶❗ / ❌ -->
                     <TextBlock Text="{Binding StaIconText}"
-                               FontSize="12"
-                               Foreground="#BDC3C7"
+                               FontSize="12" 
+                               Foreground="{Binding StaIconBrush}"
                                Margin="0,0,5,0"
                                VerticalAlignment="Center"/>
                     <TextBlock Text="{Binding StaStatusText}"

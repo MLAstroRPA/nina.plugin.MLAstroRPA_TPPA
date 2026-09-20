@@ -59,19 +59,19 @@ namespace MLAstro_Robotic_Polar_Alignment.Dockables
         private string _connectionStatusText = "Disconnected";
         private Visibility _controlsVisibility = Visibility.Collapsed;
 
-        // HeaderBar — dòng AP (Connected/Ready/Error) + dòng STA (icon + IP LAN của thiết bị)
-        // (cả hai dòng dùng CÙNG màu xám như nhãn — KHÔNG tô màu theo trạng thái)
-        private string _apStatusText = "AP: -";
+        // HeaderBar — dòng AP/STA dùng EMOJI MÀU (NINA/.NET 8 vẽ được emoji màu qua Segoe UI Emoji):
+        //   AP:  🛜 = PC đi qua hotspot · 🟢 = AP đã lên nhưng PC đi đường khác · ❌ = AP lỗi
+        //   STA: 📶 = có internet · 📶❗ = có router nhưng không internet · ❌ = chưa vào router
+        private string _apIconGlyph = "\u274C";
+        private string _apStatusText = string.Empty;   // IP của AP (hoặc "-" khi chưa biết)
         private bool _apReady;
         private string _apIp = string.Empty;
-        // Icon dòng STA (dùng ký tự cho gọn): 📶 = có internet · 📶! = có router nhưng không internet ·
-        // 📶x = chưa vào router. Viết bằng escape để không phụ thuộc encoding của file.
-        private const string StaIconInternet = "\U0001F4F6";
-        private const string StaIconNoInternet = "\U0001F4F6!";
-        private const string StaIconNone = "\U0001F4F6x";
+        private string _staIconText = "\u274C";
+        // Màu icon riêng cho từng dòng (chỉ ăn khi icon là glyph text đơn sắc — emoji màu bỏ qua Foreground).
+        private Brush _apIconBrush = Brushes.Gray;
+        private Brush _staIconBrush = Brushes.Gray;
 
         private string _staStatusText = "none";
-        private string _staIconText = StaIconNone;
 
         // Manual Movement Properties
         private int _currentSpeed = 3;
@@ -258,11 +258,32 @@ namespace MLAstro_Robotic_Polar_Alignment.Dockables
             private set => SetProperty(ref _staStatusText, value);
         }
 
-        /// <summary>Icon dòng STA: 📶 (có internet) / 📶! (có router, không internet) / 📶x (chưa vào router).</summary>
+        /// <summary>Icon dòng AP: 🛜 (PC đi qua hotspot) · 🟢 (AP đã lên, đi đường khác) · ❌ (AP lỗi).</summary>
+        public string ApIconGlyph
+        {
+            get => _apIconGlyph;
+            private set => SetProperty(ref _apIconGlyph, value);
+        }
+
+        /// <summary>Icon dòng STA: 📶 (có internet) · 📶❗ (có router, không internet) · ❌ (chưa vào router).</summary>
         public string StaIconText
         {
             get => _staIconText;
             private set => SetProperty(ref _staIconText, value);
+        }
+
+        /// <summary>Màu icon dòng AP: xám (chưa biết) · xanh lá (Connected) · xanh dương (Ready) · đỏ (Error).</summary>
+        public Brush ApIconBrush
+        {
+            get => _apIconBrush;
+            private set => SetProperty(ref _apIconBrush, value);
+        }
+
+        /// <summary>Màu icon dòng STA: xanh lá (có internet) · vàng cam (có router, không internet) · đỏ (chưa vào router).</summary>
+        public Brush StaIconBrush
+        {
+            get => _staIconBrush;
+            private set => SetProperty(ref _staIconBrush, value);
         }
 
         #endregion
@@ -1219,32 +1240,40 @@ namespace MLAstro_Robotic_Polar_Alignment.Dockables
             // Chưa nói chuyện được với thiết bị thì chưa biết AP thế nào.
             if (!_serialService.IsConnected)
             {
-                ApStatusText = "AP: -";
+                ApIconGlyph = string.Empty;
+                ApIconBrush = Brushes.Gray;
+                ApStatusText = "-";
                 return;
             }
 
             if (!_apReady)
             {
-                ApStatusText = "AP: error";
+                ApIconGlyph = "\u274C";
+                ApIconBrush = Brushes.Red;             // ❌ Error
+                ApStatusText = string.Empty;
                 return;
             }
 
-            var ip = string.IsNullOrWhiteSpace(_apIp) ? string.Empty : " " + _apIp.Trim();
+            ApStatusText = string.IsNullOrWhiteSpace(_apIp) ? string.Empty : _apIp.Trim();
             if (string.Equals(_serialService.LinkPath, "AP", StringComparison.OrdinalIgnoreCase))
             {
-                ApStatusText = "AP: connected" + ip;
+                ApIconGlyph = "\U0001F7E2";
+                ApIconBrush = Brushes.LimeGreen;         // 🟢 Connected
+   // � chính PC đang đi qua hotspot của ESP32
             }
             else
             {
-                ApStatusText = "AP: ready" + ip;
+                ApIconGlyph = "\U0001F6DC";
+                ApIconBrush = Brushes.DodgerBlue;             // 🛜 Ready
+   // � AP đã lên nhưng PC đi đường khác (STA/cáp)
             }
         }
 
         /// <summary>
-        /// Dòng "STA: &lt;icon&gt; IP" trên HeaderBar, lấy từ telemetry (token WQu + STAi):
-        ///   0 = chưa vào router       → icon gạch chéo, text "none"
-        ///   1 = có router, không net  → icon + "!", text là IP LAN của thiết bị
-        ///   2 = có internet           → icon thường, text là IP LAN của thiết bị
+        /// Dòng "STA: &lt;thanh sóng&gt;&lt;dấu&gt; IP" trên HeaderBar, lấy từ telemetry (token WQu + STAi):
+        ///   0 = chưa vào router       → thanh sóng ĐỎ + "X", text "none"
+        ///   1 = có router, không net  → thanh sóng VÀNG CAM + "!" (đỏ), text là IP LAN của thiết bị
+        ///   2 = có internet           → thanh sóng XANH, không dấu, text là IP LAN của thiết bị
         /// </summary>
         private void UpdateStaStatus(int staQuality, string? staIp)
         {
@@ -1253,15 +1282,18 @@ namespace MLAstro_Robotic_Polar_Alignment.Dockables
             switch (staQuality)
             {
                 case 1:
-                    StaIconText = StaIconNoInternet;
+                    StaIconText = "\U0001F4F6\u2757";
+                    StaIconBrush = Brushes.Orange;
                     StaStatusText = ip.Length > 0 ? ip : "router only";
                     break;
                 case 2:
-                    StaIconText = StaIconInternet;
+                    StaIconText = "\U0001F4F6";
+                    StaIconBrush = Brushes.LimeGreen;
                     StaStatusText = ip.Length > 0 ? ip : "connected";
                     break;
                 default:
-                    StaIconText = StaIconNone;
+                    StaIconText = "\u274C";
+                    StaIconBrush = Brushes.Red;
                     StaStatusText = "none";
                     break;
             }
