@@ -60,8 +60,10 @@ namespace MLAstro_Robotic_Polar_Alignment.Dockables
         private Visibility _controlsVisibility = Visibility.Collapsed;
 
         // HeaderBar — dòng AP/STA dùng EMOJI MÀU (NINA/.NET 8 vẽ được emoji màu qua Segoe UI Emoji):
-        //   AP:  🛜 = PC đi qua hotspot · 🟢 = AP đã lên nhưng PC đi đường khác · ❌ = AP lỗi
-        //   STA: 📶 = có internet · 📶❗ = có router nhưng không internet · ❌ = chưa vào router
+        //   AP:  🟢 = PC đi qua hotspot (Connected) · 🛜 = AP đã lên nhưng PC đi đường khác (Ready) · ❌ = AP lỗi
+        //   STA: icon vẽ bằng font đơn sắc (XAML: Segoe UI Symbol) nên đổi MÀU được:
+        //        glyph = 📶 có internet · 📶❗ có router nhưng không internet · ❌ chưa vào router;
+        //        màu = xanh lục khi CHÍNH PC đi qua đường STA · xanh lam khi PC đi đường khác
         private string _apIconGlyph = "\u274C";
         private string _apStatusText = string.Empty;   // IP của AP (hoặc "-" khi chưa biết)
         private bool _apReady;
@@ -1257,38 +1259,44 @@ namespace MLAstro_Robotic_Polar_Alignment.Dockables
             ApStatusText = string.IsNullOrWhiteSpace(_apIp) ? string.Empty : _apIp.Trim();
             if (string.Equals(_serialService.LinkPath, "AP", StringComparison.OrdinalIgnoreCase))
             {
-                ApIconGlyph = "\U0001F7E2";
-                ApIconBrush = Brushes.LimeGreen;         // 🟢 Connected
-   // � chính PC đang đi qua hotspot của ESP32
+                // 🛜 green: Connected: CHÍNH PC (NINA) đang đi qua hotspot của ESP32.
+                ApIconGlyph = "\U0001F6DC";
+                ApIconBrush = Brushes.LimeGreen;
             }
             else
             {
+                // 🛜 blue: Ready: AP đã lên nhưng PC đi đường khác (STA / cáp USB).
                 ApIconGlyph = "\U0001F6DC";
-                ApIconBrush = Brushes.DodgerBlue;             // 🛜 Ready
-   // � AP đã lên nhưng PC đi đường khác (STA/cáp)
+                ApIconBrush = Brushes.DodgerBlue;
             }
         }
 
         /// <summary>
-        /// Dòng "STA: &lt;thanh sóng&gt;&lt;dấu&gt; IP" trên HeaderBar, lấy từ telemetry (token WQu + STAi):
-        ///   0 = chưa vào router       → thanh sóng ĐỎ + "X", text "none"
-        ///   1 = có router, không net  → thanh sóng VÀNG CAM + "!" (đỏ), text là IP LAN của thiết bị
-        ///   2 = có internet           → thanh sóng XANH, không dấu, text là IP LAN của thiết bị
+        /// Dòng "STA: &lt;icon&gt; IP" trên HeaderBar — glyph = chất lượng sóng, MÀU = trạng thái CLIENT:
+        ///   glyph (token WQu): 0 = chưa vào router → ❌ · 1 = có router, không internet → 📶❗ ·
+        ///   2 = có internet → 📶 (text = IP LAN của thiết bị, "none" khi chưa vào router).
+        ///   màu (LinkPath): xanh lục khi CHÍNH PC (NINA) đang đi qua đường STA; xanh lam khi PC đi
+        ///   đường khác (cáp USB "COM" hoặc hotspot "AP"). Riêng ❌ chưa vào router giữ màu đỏ.
+        ///   Icon phải vẽ bằng font đơn sắc (XAML: Segoe UI Symbol) thì Foreground mới ăn.
         /// </summary>
         private void UpdateStaStatus(int staQuality, string? staIp)
         {
             var ip = string.IsNullOrWhiteSpace(staIp) ? string.Empty : staIp.Trim();
 
+            // Trạng thái client: CHÍNH PC (NINA) có đang đi qua đường STA này không.
+            var clientViaSta = string.Equals(_serialService.LinkPath, "STA", StringComparison.OrdinalIgnoreCase);
+            var clientBrush = clientViaSta ? Brushes.LimeGreen : Brushes.DodgerBlue;
+
             switch (staQuality)
             {
                 case 1:
                     StaIconText = "\U0001F4F6\u2757";
-                    StaIconBrush = Brushes.Orange;
+                    StaIconBrush = clientBrush;
                     StaStatusText = ip.Length > 0 ? ip : "router only";
                     break;
                 case 2:
                     StaIconText = "\U0001F4F6";
-                    StaIconBrush = Brushes.LimeGreen;
+                    StaIconBrush = clientBrush;
                     StaStatusText = ip.Length > 0 ? ip : "connected";
                     break;
                 default:

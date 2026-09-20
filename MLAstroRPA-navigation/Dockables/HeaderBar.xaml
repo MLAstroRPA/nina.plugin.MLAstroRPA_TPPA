@@ -138,8 +138,9 @@
                                Foreground="#BDC3C7"
                                Margin="0,0,5,0"
                                VerticalAlignment="Center"/>
-                    <!-- Icon AP: tô màu bằng Foreground (WPF KHÔNG vẽ được emoji màu) — wifi xanh dương
-                         (PC đi qua hotspot) · ● xanh lá (AP đã lên, PC đi đường khác) · ✕ đỏ (AP lỗi). -->
+                    <!-- Icon AP (emoji màu, tự có màu sẵn): 🟢 CHÍNH PC đi qua hotspot · 🛜 AP đã lên
+                         nhưng PC đi đường khác · ❌ AP lỗi. Foreground={ApIconBrush} chỉ có tác dụng
+                         nếu sau này đổi sang glyph đơn sắc. -->
                     <TextBlock Text="{Binding ApIconGlyph}"
                                FontSize="12" 
                                Foreground="{Binding ApIconBrush}"
@@ -151,9 +152,10 @@
                                VerticalAlignment="Center"/>
                 </StackPanel>
 
-                <!-- STA: <thanh sóng><dấu> IP — thanh sóng "▂▄▆" tô màu theo chất lượng đường STA
-                     (xanh = có internet · vàng cam = có router nhưng không internet · đỏ = chưa vào
-                     router), dấu "!" / "X" luôn màu đỏ (WPF không vẽ được emoji màu).
+                <!-- STA: <icon> IP — icon vẽ bằng FONT ĐƠN SẮC (Segoe UI Symbol) nên tô MÀU được:
+                     glyph = chất lượng đường STA (📶 có internet · 📶❗ có router, không internet ·
+                     ❌ chưa vào router); màu = trạng thái CLIENT — xanh lục khi CHÍNH PC (NINA) đi
+                     qua đường STA, xanh lam khi PC đi đường khác (cáp USB / hotspot AP).
                      Chỉ hiện khi đã kết nối + handshake OK (cùng điều kiện với dòng AP). -->
                 <StackPanel Orientation="Horizontal" Margin="0,3,0,0"
                             Visibility="{Binding ControlsVisibility}">
@@ -161,8 +163,10 @@
                                Foreground="#BDC3C7"
                                Margin="0,0,5,0"
                                VerticalAlignment="Center"/>
-                    <!-- Icon chất lượng đường STA (emoji màu): 📶 / 📶❗ / ❌ -->
+                    <!-- Icon đường STA: glyph theo chất lượng sóng, màu theo trạng thái client.
+                         FontFamily đơn sắc bắt buộc — emoji màu sẽ bỏ qua Foreground. -->
                     <TextBlock Text="{Binding StaIconText}"
+                               FontFamily="Segoe UI Symbol"
                                FontSize="12" 
                                Foreground="{Binding StaIconBrush}"
                                Margin="0,0,5,0"
