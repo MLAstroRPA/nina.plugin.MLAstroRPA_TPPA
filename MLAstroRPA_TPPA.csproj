@@ -102,10 +102,13 @@ sequencer instruction and polar alignment assistant.</Description>
          AssemblyMetadata("FeaturedImageURL") and the in-UI logos are embedded resources. -->
   </Target>
 
-  <!-- Keep the MSI/GitHub-release staging copy of the plugin DLL fresh on every Release build.
-       Building the installer (MLAstroRPA_TPPA.Installer.wixproj) triggers this via the
-       ProjectReference, and Package.wxs harvests the DLL from Installer\MSI\Plugin\MLAstroRPA_TPPA. -->
-  <Target Name="RefreshInstallerPluginDll" AfterTargets="PostBuildEvent" Condition="'$(Configuration)' == 'Release'">
+  <!-- Keep the MSI/GitHub-release staging copy of the plugin DLL fresh on EVERY build
+       (Debug included - user request 2026-09-20: build Debug cũng copy DLL tới các thư mục đích
+       giống build Release). Building the installer (MLAstroRPA_TPPA.Installer.wixproj) triggers
+       this via the ProjectReference, and Package.wxs harvests the DLL from
+       Installer\MSI\Plugin\MLAstroRPA_TPPA. Lưu ý: sau khi build Debug, phải build lại Release
+       trước khi đóng MSI/release nếu không muốn gói nhầm DLL Debug. -->
+  <Target Name="RefreshInstallerPluginDll" AfterTargets="PostBuildEvent">
     <PropertyGroup>
       <StagedPluginDir>$(ProjectDir)Installer\MSI\Plugin\MLAstroRPA_TPPA</StagedPluginDir>
     </PropertyGroup>

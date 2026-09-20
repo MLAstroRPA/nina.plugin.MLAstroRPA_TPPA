@@ -106,6 +106,16 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
         private int _connectionCheckFailures;
         private ManagementEventWatcher? _deviceChangeWatcher;
 
+        // ===== LINK WATCHDOG (PC client) =====
+        // Phiên đã handshake OK mà KHÔNG nhận được bất kỳ dữ liệu nào từ thiết bị trong
+        // LinkWatchdogTimeoutMs (Serial: telemetry trả lời poll '?'; Wireless: telemetry/log đẩy
+        // liên tục) => coi như MẤT LIÊN LẠC, tự Disconnect (toast + dòng System log; việc nhả
+        // quyền TPPA do Disconnect() -> RaiseExternalState(false) lo sẵn).
+        private const int LinkWatchdogTimeoutMs = 5000;
+        private System.Timers.Timer? _linkWatchdogTimer;
+        private DateTime _lastRxUtc = DateTime.UtcNow;
+        private int _linkWatchdogChecking;
+
         public event PropertyChangedEventHandler? PropertyChanged;
         public event EventHandler<TelemetryDataEventArgs>? TelemetryDataReceived;
         public event EventHandler<string>? CompletionReceived;
@@ -463,6 +473,13 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
             OnPropertyChanged(nameof(FirmwareVersion));
             OnPropertyChanged(nameof(LinkPath));
             InvokeOnUiThread(() => RaiseExternalState(IsConnected));
+
+            // Phiên wireless vừa kết nối: bật watchdog + đánh dấu "còn sống" từ frame đầu tiên, để
+            // trường hợp "kết nối nhưng thiết bị im lặng" cũng bị ngắt sau LinkWatchdogTimeoutMs.
+            if (_wirelessProxy?.IsConnected == true)
+            {
+                TouchLinkAlive();
+            }
         }
 
         /// <summary>Transport wireless: cập nhật firmware version nhận được từ handshake/init snapshot.</summary>
@@ -1226,6 +1243,7 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
                     Array.Resize(ref buffer, bytesRead);
                 }
 
+                TouchLinkAlive();   // nuôi watchdog: vừa có dữ liệu từ thiết bị qua COM
                 AppendTerminalEntry(SerialTerminalEntry.Received(buffer, _serialPort.Encoding, HexDisplay));
                 var receivedText = _serialPort.Encoding.GetString(buffer);
 
@@ -1545,6 +1563,100 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
             _connectionCheckTimer.Dispose();
             _connectionCheckTimer = null;
             Interlocked.Exchange(ref _connectionCheckInProgress, 0);
+            StopLinkWatchdog();
+        }
+
+        /// <summary>Đánh dấu vừa nhận dữ liệu từ thiết bị (mọi transport) — nuôi watchdog.</summary>
+        private void TouchLinkAlive()
+        {
+            _lastRxUtc = DateTime.UtcNow;
+            StartLinkWatchdog();   // lazy: tự bật ở dữ liệu ĐẦU TIÊN sau khi kết nối
+        }
+
+        private void StartLinkWatchdog()
+        {
+            if (_linkWatchdogTimer != null)
+            {
+                return;
+            }
+
+            _linkWatchdogTimer = new System.Timers.Timer(1000) { AutoReset = true };
+            _linkWatchdogTimer.Elapsed += (_, _) => CheckLinkWatchdog();
+            _linkWatchdogTimer.Start();
+            Logger.Info("[MLAstro] Link watchdog started (auto-disconnect when the device goes silent)");
+        }
+
+        private void StopLinkWatchdog()
+        {
+            if (_linkWatchdogTimer == null)
+            {
+                return;
+            }
+
+            _linkWatchdogTimer.Stop();
+            _linkWatchdogTimer.Dispose();
+            _linkWatchdogTimer = null;
+            _lastRxUtc = DateTime.UtcNow;
+        }
+
+        /// <summary>
+        /// Chạy mỗi giây: handshake OK mà thiết bị im lặng quá LinkWatchdogTimeoutMs => tự ngắt kết nối.
+        /// Bỏ qua khi: chưa kết nối · chưa handshake xong (để luồng handshake tự báo NO ANSWER rồi xử lý) ·
+        /// poll '?' đang tạm dừng trên Serial (TPPA mượn cổng — thiết bị im lặng là CHỦ Ý).
+        /// </summary>
+        private void CheckLinkWatchdog()
+        {
+            if (Interlocked.Exchange(ref _linkWatchdogChecking, 1) == 1)
+            {
+                return;
+            }
+
+            try
+            {
+                if (!IsConnected)
+                {
+                    return;
+                }
+
+                if (!string.Equals(HandshakeStatus, "OK!", StringComparison.Ordinal))
+                {
+                    return;
+                }
+
+                if (!WirelessActive && PauseQueryGlobal)
+                {
+                    return;
+                }
+
+                var silentFor = DateTime.UtcNow - _lastRxUtc;
+                if (silentFor.TotalMilliseconds < LinkWatchdogTimeoutMs)
+                {
+                    return;
+                }
+
+                var transport = WirelessActive ? "wireless (WebSocket)" : "serial (COM)";
+                Logger.Warning($"[MLAstro] Link watchdog: no data from device for {silentFor.TotalSeconds:0.0}s ({transport}) - auto-disconnecting");
+                AppendTerminalEntry(SerialTerminalEntry.Disconnected("Disconnected: no data from device (link watchdog)"));
+
+                try
+                {
+                    NINA.Core.Utility.Notification.Notification.ShowWarning(
+                        "MLAstro device stopped responding - the connection was closed automatically. Check power / Wi-Fi and reconnect.");
+                }
+                catch
+                {
+                }
+
+                Disconnect();
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"[MLAstro] Link watchdog check failed: {ex.Message}");
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _linkWatchdogChecking, 0);
+            }
         }
 
         private void StartDeviceChangeWatcher()
@@ -1881,6 +1993,7 @@ namespace MLAstro_Robotic_Polar_Alignment.Services
                 return;
             }
 
+            TouchLinkAlive();   // nuôi watchdog: vừa có dữ liệu từ thiết bị qua WebSocket
             try { ProcessTelemetryData(text); }
             catch (Exception ex) { Logger.Warning($"[MLAstro][WS] Telemetry inject failed: {ex.Message}"); }
 
