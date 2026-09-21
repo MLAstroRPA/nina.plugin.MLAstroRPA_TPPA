@@ -40,8 +40,15 @@ Plugin/PC dùng **cùng endpoint** `/ws` như Web UI và phân biệt bằng t�
 Server trả lời:
 
 ```json
-{ "cmd": "handshakeResult", "result": true, "transport": "ws", "fw_ver": "v1.2.x", "sn": "AA:BB:CC:DD:EE:FF", "serial_locked": true }
+{ "cmd": "handshakeResult", "result": true, "transport": "ws", "fw_ver": "v1.2.x", "sn": "AA:BB:CC:DD:EE:FF", "serial_locked": true, "link": "AP" }
 ```
+
+`link` cho biết phiên WS này đi vào qua interface NÀO của thiết bị (tính theo `remoteIP` của TỪNG client):
+
+| Giá trị | Nghĩa |
+| --- | --- |
+| `"AP"` | Client đang join hotspot của ESP32 (IP client thuộc subnet AP) |
+| `"STA"` | Client đi qua router mà ESP32 đã join |
 
 Từ chối (PC thứ hai / Serial đang giữ quyền / sai key):
 
@@ -137,6 +144,7 @@ Immediately after a successful connection, server sends a large init snapshot:
   "serial_locked": true,
   "role": "monitor",
   "control_owner": "pc-wireless",
+  "link": "AP",
   "speedLevel": 3,
   "fw_ver": "v2.x.x",
   "homed": true,
@@ -273,11 +281,31 @@ Roughly every 250 ms, server pushes one telemetry packet:
   "isCalibrating": false,
   "sys_status": "READY",
   "rssi": -55,
+  "sta_qual": 2,
+  "sta_ip": "192.168.1.50",
+  "ap_ready": true,
+  "ap_ip": "192.168.4.1",
   "clients": [
     { "mac": "AA:BB:CC:DD:EE:FF", "ip": "192.168.4.2", "name": "Unknown" }
   ]
 }
 ```
+
+Chất lượng đường STA + trạng thái AP (dùng cho dòng `AP:` / `STA:` của plugin và Web UI):
+
+| Field | Nghĩa |
+| --- | --- |
+| `sta_qual` | `0` = chưa vào router · `1` = đã vào router + có IP nhưng KHÔNG có internet · `2` = có internet |
+| `sta_ip` | IP LAN mà router cấp cho thiết bị (`""` khi chưa vào router) |
+| `ap_ready` | AP (hotspot) của thiết bị đã lên và có IP |
+| `ap_ip` | IP hotspot của thiết bị (`""` khi AP không lên) |
+
+> `ap_ready`/`ap_ip` + `link` (ở `handshakeResult` và frame đầu tiên) cho phép client hiển thị đúng dòng
+> `AP: connected/ready/error <IP>`: **connected** khi chính client đi qua AP, **ready** khi AP đã lên
+> nhưng client đi đường khác (STA/cáp USB), **error** khi AP không lên.
+> `sta_qual` dò bằng TCP-connect probe tới `1.1.1.1:53` / `8.8.8.8:53` (timeout 1.2 s) mỗi 10 s,
+> chạy ở task riêng Core 1 priority thấp nên không ảnh hưởng telemetry. Firmware < 1.7.0 không
+> gửi 2 field này — plugin suy ra mức tối thiểu từ `rssi` (> -1000 ⇒ đang vào router).
 
 If `show_hardlimit_monitor=true`, telemetry also includes:
 - `running`
