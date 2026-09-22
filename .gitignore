@@ -18,6 +18,9 @@ obj/
 *.TMP
 *~
 
+# Local integration spec (not for publishing)
+MLAstroRPA-implement/tppa-mlastro-integration-spec.md
+
  
 Installer/MSI/bin/
 Installer/MSI/obj/  
