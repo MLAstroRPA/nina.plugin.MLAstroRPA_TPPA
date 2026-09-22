@@ -10,8 +10,8 @@ obj/
 *.sln.docstates
 
 # IDE - VS Code
-.vscode/
-.vscode/extensions/
+#.vscode/
+#.vscode/extensions/
 
 # Temp / scratch
 *.tmp
@@ -19,7 +19,7 @@ obj/
 *~
 
 # Local integration spec (not for publishing)
-MLAstroRPA-implement/tppa-mlastro-integration-spec.md
+#MLAstroRPA-implement/tppa-mlastro-integration-spec.md
 
  
 Installer/MSI/bin/
