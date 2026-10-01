@@ -49,7 +49,7 @@ instruction into ONE plugin.
 
 * CONTROL / CONNECTION / CONFIGURATION tabs: connect to the MLAstro RPA controller (ESP32) via
   serial, run the robotic polar alignment routine, configure motor drivers, soft limits,
-  backlash & P.A overshoot and WiFi.
+  backlash and WiFi.
 * TPPA: three point polar alignment anywhere in the sky, as a tool pane inside the imaging tab
   and as an advanced sequencer instruction.
 

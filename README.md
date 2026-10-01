@@ -17,7 +17,7 @@ A single **NINA** plugin that merges:
     alarm history, FORCE STOP / RESET ERROR.
   - **CONNECTION** — COM port + baud selection, connect, ESP32 reset, live serial terminal
     (Hex checkbox before Send, handshake `[MLAstroRPA-TC]` → `Handshake: OK!` / `NO ANSWER`).
-  - **CONFIGURATION** — soft limits, TMC2209 motor drivers (AZ/ALT), backlash & P.A overshoot,
+  - **CONFIGURATION** — soft limits, TMC2209 motor drivers (AZ/ALT), backlash,
     WiFi (AP + Station), save-all & reboot.
 - **Three Point Polar Alignment (TPPA)** — the polar alignment wizard/assistant available as a
   tool pane inside the imaging tab plus an advanced sequencer instruction, able to drive the
